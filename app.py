@@ -140,8 +140,7 @@ if st.session_state.pcr_count >= 0: # Runs every refresh for 30th data display
         if "⚓" in str(val): return "color: #ffaa00; font-weight: bold" # Orange
         return ""
 
-    styled_df = df.style.applymap(color_signals, subset=['CALL Signal', 'PUT Signal'])
-    st.table(styled_df)
+ styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
 
     # PCR Calculation display
     st.markdown("---")
