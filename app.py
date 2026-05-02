@@ -97,3 +97,61 @@ def render_dashboard():
     st.caption(f"Next Sync in 14s | Data Timestamp: {time.strftime('%H:%M:%S')}")
 
 render_dashboard()
+
+# --- SCREEN RECORDER SECTION (Aakhiri mein add karein) ---
+st.divider()
+st.subheader("🎥 Session Recorder")
+
+# JavaScript for Screen Recording
+st.components.v1.html("""
+    <div style="background:#1e1e1e; padding:15px; border-radius:10px; border:1px solid #ff4b4b; text-align:center;">
+        <button id="startBtn" style="background:#ff4b4b; color:white; border:none; padding:12px 25px; border-radius:5px; cursor:pointer; font-weight:bold; font-size:16px;">🔴 START RECORDING</button>
+        <button id="stopBtn" style="background:white; color:black; border:none; padding:12px 25px; border-radius:5px; cursor:pointer; font-weight:bold; font-size:16px; display:none;">⏹️ STOP & DOWNLOAD</button>
+        <p id="status" style="color:white; margin-top:10px; font-family:sans-serif;">Ready to capture your trading session</p>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        document.getElementById('startBtn').onclick = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { frameRate: 30 },
+                    audio: true 
+                });
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Devil_Pro_Session_' + new Date().getTime() + '.webm';
+                    a.click();
+                    recordedChunks = [];
+                };
+
+                mediaRecorder.start();
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                document.getElementById('status').innerText = "🔴 Recording in progress...";
+            } catch (err) {
+                console.error("Error: " + err);
+                alert("Permission denied or browser not supported.");
+            }
+        };
+
+        document.getElementById('stopBtn').onclick = () => {
+            mediaRecorder.stop();
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('status').innerText = "✅ Video Saved Successfully!";
+        };
+    </script>
+""", height=150)
+
+# --- ADDITIONAL GREEKS LOGIC (Agar upar nahi hai toh) ---
+st.caption("Note: Greeks are calculated based on 30th April Implied Volatility (IV) levels.")
