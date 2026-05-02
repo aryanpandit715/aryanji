@@ -120,18 +120,6 @@ def render_dashboard():
 
 render_dashboard()
 
-
-
-                mediaRecorder.start();
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('stopBtn').style.display = 'inline-block';
-                document.getElementById('status').innerText = "🔴 Recording in progress...";
-            } catch (err) {
-                console.error("Error: " + err);
-                alert("Permission denied or browser not supported.");
-            }
-        };
-
         document.getElementById('stopBtn').onclick = () => {
             mediaRecorder.stop();
             document.getElementById('startBtn').style.display = 'inline-block';
