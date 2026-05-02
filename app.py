@@ -141,7 +141,6 @@ if st.session_state.pcr_count >= 0: # Runs every refresh for 30th data display
         return ""
 
  styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
-
     # PCR Calculation display
     st.markdown("---")
     col_pcr1, col_pcr2 = st.columns(2)
