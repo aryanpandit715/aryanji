@@ -1,123 +1,126 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
+import yfinance as yf
+from datetime import datetime
 
-# Page Config
-st.set_page_config(page_title="Devil-Pro Terminal", layout="wide")
-st.title("😈 DEVIL-PRO FULL INSTITUTIONAL TERMINAL")
+# Page Configuration
+st.set_page_config(page_title="Devil-Pro Live Terminal", layout="wide")
+st.title("😈 DEVIL-PRO LIVE INSTITUTIONAL TERMINAL")
 
-# --- 1. GLOBAL & LIVE WATCHLIST (Numbers & Gap Up/Down) ---
-st.subheader("🌐 Global & Domestic Live Watch")
-w1, w2, w3, w4 = st.columns(4)
+# --- 1. LIVE MARKET TRACKER (YFinance) ---
+def get_global_prices():
+    # Symbols for Live Tracking
+    symbols = {
+        "NIFTY 50": "^NSEI",
+        "BANK NIFTY": "^NSEBANK",
+        "RELIANCE": "RELIANCE.NS",
+        "NIFTY IT": "^CNXIT",
+        "GIFT Nifty": "SGXNifty-F",
+        "CRUDE OIL": "CL=F",
+        "BRENT OIL": "BZ=F",
+        "NASDAQ": "^IXIC"
+    }
+    prices = {}
+    for name, sym in symbols.items():
+        try:
+            ticker = yf.Ticker(sym)
+            data = ticker.history(period="1d")
+            if not data.empty:
+                price = data['Close'].iloc[-1]
+                change = price - data['Open'].iloc[-1]
+                prices[name] = (f"{price:,.2f}", f"{change:+.2f}")
+            else:
+                prices[name] = ("Data Off", "0")
+        except:
+            prices[name] = ("Connect Error", "0")
+    return prices
 
-# Note: Live prices Monday 9:15 AM par update honge
-w1.metric("NIFTY 50", "22,450", "+120 (Gap Up)")
-w2.metric("BANK NIFTY", "48,200", "-50 (Flat)")
-w3.metric("RELIANCE", "2,910", "+15 (Bullish)")
-w4.metric("NIFTY IT", "34,100", "+200 (Strong)")
+st.subheader("🌐 Global & Domestic Live Watchlist")
+live_prices = get_global_prices()
+cols = st.columns(4)
+for i, (name, val) in enumerate(live_prices.items()):
+    col_idx = i % 4
+    cols[col_idx].metric(name, val[0], val[1])
 
-g1, g2, g3, g4 = st.columns(4)
-g1.metric("GIFT NIFTY", "22,580", "🟢 +0.8%")
-g2.metric("CRUDE OIL", "83.50", "🔴 -1.2%")
-g3.metric("BRENT OIL", "87.20", "🔴 -0.9%")
-g4.metric("NASDAQ", "16,100", "🟢 +1.1%")
-
-# --- 2. LOGIC & DATA FETCHING ---
-def get_pro_data():
+# --- 2. NSE OPTION CHAIN & SENTIMENT LOGIC ---
+def get_nse_data():
     url = "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
     headers = {"user-agent": "Mozilla/5.0", "accept-encoding": "gzip, deflate", "accept-language": "en-US"}
-    
-    session = requests.Session()
-    session.get("https://www.nseindia.com", headers=headers, timeout=5)
-    response = session.get(url, headers=headers, timeout=5)
-    
-    if response.status_code == 200:
+    try:
+        session = requests.Session()
+        session.get("https://www.nseindia.com", headers=headers, timeout=5)
+        response = session.get(url, headers=headers, timeout=5)
         data = response.json()
+        
         spot = data['records']['index']['last']
         atm = round(spot / 50) * 50
         
-        # PCR Calculation
-        ce_tot = data['filtered']['CE']['totOI']
-        pe_tot = data['filtered']['PE']['totOI']
-        pcr = round(pe_tot / ce_tot, 2)
+        # PCR & Sentiment (55-65 Rule)
+        pcr = round(data['filtered']['PE']['totOI'] / data['filtered']['CE']['totOI'], 2)
+        if pcr >= 0.65: sentiment = "🚀 BULLISH"
+        elif pcr <= 0.55: sentiment = "😈 BEARISH"
+        else: sentiment = "⚪ SIDEWAYS"
         
-        # Market Sentiment Logic (55-65 Rule)
-        if pcr >= 0.65: sentiment = "🚀 BULLISH (Buy Dips)"
-        elif pcr <= 0.55: sentiment = "😈 BEARISH (Sell Rise)"
-        else: sentiment = "⚪ SIDEWAYS (No Trade Zone)"
+        # Filter 6 OTM CE and 6 OTM PE (Total 13 strikes including ATM)
+        all_strikes = data['filtered']['data']
+        strikes_filtered = [r for r in all_strikes if abs(r['strikePrice'] - atm) <= 300]
         
-        # Option Chain (6 OTM Up, 6 OTM Down)
-        all_data = data['filtered']['data']
-        strikes = [row for row in all_data if abs(row['strikePrice'] - atm) <= 300]
-        
-        final_rows = []
-        for r in strikes:
-            ce = r.get('CE', {})
-            pe = r.get('PE', {})
-            sp = r['strikePrice']
-            
-            # Simplified Greeks & Warning Signals
-            ce_iv = ce.get('impliedVolatility', 0)
-            pe_iv = pe.get('impliedVolatility', 0)
+        rows = []
+        for r in strikes_filtered:
+            ce, pe, sp = r.get('CE', {}), r.get('PE', {}), r['strikePrice']
             
             # Warning Signals
-            signal = "Neutral"
-            if ce.get('changeInOpenInterest', 0) < 0: signal = "🔥 SHORT COVERING"
-            elif pe.get('changeInOpenInterest', 0) < 0: signal = "⚠️ LONG UNWINDING"
-            elif ce.get('openInterest', 0) > 100000: signal = "😈 HEAVY RESISTANCE"
+            sig = "Neutral"
+            if ce.get('changeInOpenInterest', 0) < 0: sig = "🔥 SHORT COVERING"
+            elif pe.get('changeInOpenInterest', 0) < 0: sig = "⚠️ LONG UNWINDING"
+            elif ce.get('openInterest', 0) > 100000: sig = "😈 HEAVY RES"
             
-            final_rows.append({
+            rows.append({
                 "Strike": f"{sp} {'(ATM)' if sp==atm else ''}",
-                "CE Delta": round(0.5 + (atm-sp)/1000, 2), # Simulated Delta
-                "CE IV": ce_iv,
+                "CE Delta": round(0.5 + (atm-sp)/1000, 2),
+                "CE IV": ce.get('impliedVolatility', 0),
                 "Call OI": ce.get('openInterest', 0),
-                "SIGNAL": signal,
+                "SIGNAL": sig,
                 "Put OI": pe.get('openInterest', 0),
-                "PE IV": pe_iv,
+                "PE IV": pe.get('impliedVolatility', 0),
                 "PE Delta": round(-0.5 + (atm-sp)/1000, 2)
             })
-            
-        return pd.DataFrame(final_rows), spot, atm, pcr, sentiment
-    return None
+        return pd.DataFrame(rows), spot, pcr, sentiment
+    except:
+        return None
 
-# --- 3. STATE MANAGEMENT (Data Saving) ---
-if 'master_data' not in st.session_state:
-    st.session_state['master_data'] = None
+# --- 3. UI & STATE MANAGEMENT ---
+nse_data = get_nse_data()
+if nse_data is not None:
+    df, spot, pcr, sentiment = nse_data
+    st.session_state['main_df'] = df
+    st.session_state['pcr'] = pcr
+    st.session_state['sent'] = sentiment
 
-# Update Data
-pro_data = get_pro_data()
-if pro_data:
-    st.session_state['master_data'] = pro_data
-
-# --- 4. UI DISPLAY ---
-if st.session_state['master_data']:
-    df, spot, atm, pcr, sentiment = st.session_state['master_data']
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("NIFTY SPOT", spot)
-    c2.metric("PCR RATIO", f"{pcr} ({sentiment})")
-    c3.info(f"Market Alert: {sentiment}")
+if 'main_df' in st.session_state:
+    c1, c2 = st.columns([1, 2])
+    c1.metric("📊 PCR RATIO", f"{st.session_state['pcr']}")
+    c2.info(f"Market Status: {st.session_state['sent']}")
     
     st.divider()
-    st.subheader("🔥 Institutional Option Chain (Greeks & Warnings)")
-    st.dataframe(df, use_container_width=True, height=500)
+    st.subheader("🔥 Option Chain (6 Strikes OTM - Greeks & Alerts)")
+    st.table(st.session_state['main_df'])
 else:
-    st.warning("Connecting to NSE... Market opens Monday @ 9:15 AM 😈")
+    st.warning("NSE API Connecting... Monday 9:15 Live Update Activate! 😈")
 
-# --- 5. ALARM & AUTO-REFRESH (14 Sec) ---
+# --- 4. AUTO-REFRESH & ALARM ---
 st.button("🔄 MANUAL REFRESH")
-st.caption("Auto-refresh: 14 Seconds | Alarm: Enabled for 9:15 AM")
+st.markdown('<meta http-equiv="refresh" content="14">', unsafe_allow_html=True)
 
-# JavaScript for Alarm & Auto Refresh
+# Alarm Script
 st.markdown("""
-    <script>
-    setTimeout(function(){ window.location.reload(); }, 14000);
-    
-    // Simple 9:15 Alarm Logic
+<script>
     var now = new Date();
     if(now.getHours() == 9 && now.getMinutes() == 15) {
-        alert("😈 DEVIL MODE ON: Market is Open!");
+        var audio = new Audio('https://www.soundjay.com/buttons/beep-01a.mp3');
+        audio.play();
+        alert("😈 MARKET OPEN: Devil Mode Activated!");
     }
-    </script>
-    """, unsafe_allow_html=True)
+</script>
+""", unsafe_allow_html=True)
