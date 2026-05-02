@@ -149,23 +149,22 @@ def market_clocks():
 
     t_col1, t_col2 = st.columns(2)
     
-    # India Market Time Box
+ # India Market Time
     t_col1.markdown(f"""
         <div style="background:#1e1e1e; padding:15px; border-radius:10px; border-left:5px solid #00ff00; text-align:center;">
             <h4 style="margin:0; color:#00ff00;">🇮🇳 INDIA MARKET TIME</h4>
-            <p style="font-size:24px; font-weight:bold; margin:10px 0;">{india_now}</p>
-            <span style="color:gray;">(BSE/NSE - IST)</span>
+            <p style="font-size:24px; font-weight:bold; margin:10px 0; color:white;">{india_now}</p>
         </div>
-    """, unsafe_allow_globals=True)
+    """, unsafe_allow_html=True)
 
-    # Global Market Time Box
+    # Global Market Time
     t_col2.markdown(f"""
         <div style="background:#1e1e1e; padding:15px; border-radius:10px; border-left:5px solid #ff4b4b; text-align:center;">
             <h4 style="margin:0; color:#ff4b4b;">🌐 GLOBAL MARKET TIME</h4>
-            <p style="font-size:24px; font-weight:bold; margin:10px 0;">{global_now}</p>
-            <span style="color:gray;">(NASDAQ/NYSE - EST)</span>
+            <p style="font-size:24px; font-weight:bold; margin:10px 0; color:white;">{global_now}</p>
         </div>
-    """, unsafe_allow_globals=True)
+    """, unsafe_allow_html=True)
 
 # Clock ko run karein
 market_clocks()
+
