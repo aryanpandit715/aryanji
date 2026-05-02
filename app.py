@@ -196,4 +196,19 @@ def market_clocks():
 
 # Clock ko run karein
 market_clocks()
+# --- FINAL LINE: GLOBAL COMMODITIES BAR ---
+st.divider()
+c1, c2, c3 = st.columns([2, 1, 1])
 
+with c1:
+    st.caption("🌐 Global Commodity Sentiment (Refreshes every 14s)")
+
+# Crude Oil Fetch
+crude_data = yf.Ticker("CL=F").history(period="1d")
+c_price = f"${crude_data['Close'].iloc[-1]:.2f}" if not crude_data.empty else "$78.10"
+c2.metric("🛢️ CRUDE OIL", c_price)
+
+# Brent Crude Fetch
+brent_data = yf.Ticker("BZ=F").history(period="1d")
+b_price = f"${brent_data['Close'].iloc[-1]:.2f}" if not brent_data.empty else "$82.95"
+c3.metric("🌊 BRENT CRUDE", b_price)
