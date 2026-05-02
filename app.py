@@ -185,3 +185,66 @@ c3.info("Sentiment: Sideways to Bullish (30-Apr)")
 # Showing the table
 st.table(df_30)
 st.caption("Above data is the closing snapshot of Nifty on 30th April 2026.")
+# --- LIVE NSE FETCH SECTION (30 APRIL BASE) ---
+st.divider()
+st.subheader("🔥 Live Nifty Option Chain (NSE Fetch)")
+
+@st.fragment(run_every=14)
+def live_nse_fetch():
+    # NSE API Headers
+    url = "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
+    headers = {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "accept-encoding": "gzip, deflate, br",
+        "accept-language": "en-US,en;q=0.9"
+    }
+
+    try:
+        # Fetching Live Data
+        session = requests.Session()
+        session.get("https://www.nseindia.com", headers=headers, timeout=5)
+        response = session.get(url, headers=headers, timeout=5)
+        data = response.json()
+
+        # Data Processing
+        spot = data['records']['index']['last']
+        atm = round(spot / 50) * 50
+        
+        # Filtering Strikes (6-6 OTM from ATM)
+        raw_data = data['filtered']['data']
+        strikes_list = [r for r in raw_data if abs(r['strikePrice'] - atm) <= 300]
+        
+        rows = []
+        for r in strikes_list:
+            ce = r.get('CE', {})
+            pe = r.get('PE', {})
+            sp = r['strikePrice']
+            
+            rows.append({
+                "Strike": f"{sp} {'(ATM)' if sp==atm else ''}",
+                "CE IV": ce.get('impliedVolatility', 0),
+                "CE Change OI": ce.get('changeInOpenInterest', 0),
+                "Call OI": ce.get('openInterest', 0),
+                "Put OI": pe.get('openInterest', 0),
+                "PE Change OI": pe.get('changeInOpenInterest', 0),
+                "PE IV": pe.get('impliedVolatility', 0),
+                "Signal": "Short Covering" if ce.get('changeInOpenInterest', 0) < 0 else "Neutral"
+            })
+        
+        df_live = pd.DataFrame(rows)
+        
+        # Display Stats
+        c1, c2 = st.columns(2)
+        c1.metric("LIVE SPOT (NSE)", f"₹{spot:,.2f}")
+        c2.success(f"Last API Sync: {time.strftime('%H:%M:%S')}")
+        
+        st.table(df_live)
+
+    except Exception as e:
+        st.error(f"NSE Connection Waiting... (Market Closed or API Busy)")
+        st.info("Showing 30 April Static Snapshot as Backup.")
+        # Backup data if API fails
+        st.table(pd.DataFrame({"Status": ["API Offline"], "Note": ["Will auto-reconnect in 14s"]}))
+
+# Fragment ko run karna
+live_nse_fetch()
