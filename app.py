@@ -110,3 +110,41 @@ if st.session_state.pcr_count >= 14:
 st.info(f"⏳ Next Institutional Signal Update in: {14 - st.session_state.pcr_count}s")
 
 # --- Yahan aapka Option Chain ka table wala code aa jayega ---
+# --- 4. INSTITUTIONAL OPTION CHAIN DATA ---
+def get_option_signals(change_oi, price_chg):
+    if change_oi > 0 and price_chg > 0: return "🔥 Long Build-up"
+    elif change_oi > 0 and price_chg < 0: return "😈 Smart Money Entry"
+    elif change_oi < 0 and price_chg < 0: return "⚓ Long Unwinding"
+    elif change_oi < 0 and price_chg > 0: return "🚀 Short Covering"
+    return "Neutral"
+
+# 14-second trigger ke andar ye table load hoga
+if st.session_state.pcr_count >= 0: # Runs every refresh for 30th data display
+    st.markdown("### 📊 Institutional Data (Exp: 30-Apr)")
+    
+    # Mock Data based on 30th April context
+    data = {
+        "CALL Signal": ["🚀 Short Covering", "⚓ Call Unwinding", "😈 Devil Entry", "Neutral", "🔥 Long Build-up"],
+        "LTP (C)": [145.20, 98.40, 65.10, 42.00, 25.40],
+        "STRIKE": [24000, 24100, 24200, 24300, 24400],
+        "LTP (P)": [32.10, 54.30, 88.90, 125.60, 180.40],
+        "PUT Signal": ["🔥 Long Build-up", "Neutral", "🚀 Short Covering", "⚓ Put Unwinding", "😈 Smart Money Entry"]
+    }
+    
+    df = pd.DataFrame(data)
+    
+    # Styling Table
+    def color_signals(val):
+        if "🚀" in str(val): return "color: #00ff00; font-weight: bold" # Green
+        if "😈" in str(val): return "color: #ff4b4b; font-weight: bold" # Red
+        if "⚓" in str(val): return "color: #ffaa00; font-weight: bold" # Orange
+        return ""
+
+    styled_df = df.style.applymap(color_signals, subset=['CALL Signal', 'PUT Signal'])
+    st.table(styled_df)
+
+    # PCR Calculation display
+    st.markdown("---")
+    col_pcr1, col_pcr2 = st.columns(2)
+    col_pcr1.metric("TOTAL PCR", "0.85", delta="-0.05", delta_color="inverse")
+    col_pcr2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
