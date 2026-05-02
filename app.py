@@ -3,11 +3,31 @@ import pandas as pd
 import requests
 import yfinance as yf
 import time
+# --- 1. ACCESS CONTROL (START FROM LINE 6) ---
+ACCESS_CODE = "DEVIL715"
 
-# Page Configuration
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    # Page setup login screen ke liye
+    st.set_page_config(page_title="Devil-Pro Login", layout="wide")
+    st.markdown("<h1 style='text-align: center;'>😈 DEVIL-PRO TERMINAL</h1>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1,1,1])
+    with col2:
+        user_input = st.text_input("Enter Secret Code:", type="password")
+        if st.button("UNLOCK TERMINAL", use_container_width=True):
+            if user_input == ACCESS_CODE:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Wrong Code! 😈")
+    st.stop()
+
+# Login hone ke baad real terminal ki config
 st.set_page_config(page_title="Devil-Pro Terminal", layout="wide")
 st.title("😈 DEVIL-PRO LIVE TERMINAL")
-
 # --- 1. SCREEN RECORDER (TOP POSITION) ---
 st.components.v1.html("""
 <div style="background:#1e1e1e; padding:10px; border-radius:10px; border:1px solid #ff4b4b; text-align:center;">
