@@ -134,13 +134,15 @@ if st.session_state.pcr_count >= 0: # Runs every refresh for 30th data display
     df = pd.DataFrame(data)
     
     # Styling Table
+# Styling Table
     def color_signals(val):
-        if "🚀" in str(val): return "color: #00ff00; font-weight: bold" # Green
-        if "😈" in str(val): return "color: #ff4b4b; font-weight: bold" # Red
-        if "⚓" in str(val): return "color: #ffaa00; font-weight: bold" # Orange
+        if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
+        if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
+        if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
         return ""
 
- styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
+    styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
+    st.table(styled_df)
     # PCR Calculation display
     st.markdown("---")
     col_pcr1, col_pcr2 = st.columns(2)
