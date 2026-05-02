@@ -132,3 +132,40 @@ def devil_pro_addon():
 
 # Run the addon
 devil_pro_addon()
+# --- MARKET TIME & DUAL CLOCK SECTION ---
+st.divider()
+
+@st.fragment(run_every=1) # Har second time update hoga
+def market_clocks():
+    from datetime import datetime
+    import pytz
+
+    # Timezones set karna
+    ist = pytz.timezone('Asia/Kolkata')
+    est = pytz.timezone('US/Eastern') # Global/Nasdaq ke liye
+
+    india_now = datetime.now(ist).strftime("%H:%M:%S")
+    global_now = datetime.now(est).strftime("%H:%M:%S")
+
+    t_col1, t_col2 = st.columns(2)
+    
+    # India Market Time Box
+    t_col1.markdown(f"""
+        <div style="background:#1e1e1e; padding:15px; border-radius:10px; border-left:5px solid #00ff00; text-align:center;">
+            <h4 style="margin:0; color:#00ff00;">🇮🇳 INDIA MARKET TIME</h4>
+            <p style="font-size:24px; font-weight:bold; margin:10px 0;">{india_now}</p>
+            <span style="color:gray;">(BSE/NSE - IST)</span>
+        </div>
+    """, unsafe_allow_globals=True)
+
+    # Global Market Time Box
+    t_col2.markdown(f"""
+        <div style="background:#1e1e1e; padding:15px; border-radius:10px; border-left:5px solid #ff4b4b; text-align:center;">
+            <h4 style="margin:0; color:#ff4b4b;">🌐 GLOBAL MARKET TIME</h4>
+            <p style="font-size:24px; font-weight:bold; margin:10px 0;">{global_now}</p>
+            <span style="color:gray;">(NASDAQ/NYSE - EST)</span>
+        </div>
+    """, unsafe_allow_globals=True)
+
+# Clock ko run karein
+market_clocks()
