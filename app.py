@@ -72,10 +72,11 @@ from streamlit_autorefresh import st_autorefresh
 st_autorefresh(interval=1000, key="devil_tick")
 
 # --- 2. LIVE WATCHLIST (SAB KUCH EK SAATH) ---
-cols = st.columns(6)
+def show_watchlist_fast():
+    # Is line ke shuru mein 4 spaces honi chahiye
     cols = st.columns(6)
     
-    # 1. LIVE WATCHLIST (Symbols & Names)
+    # 1. LIVE WATCHLIST
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
     
@@ -93,7 +94,7 @@ cols = st.columns(6)
 
     st.markdown("---")
 
-    # 2. OPTION CHAIN (30-APR DATA LOGIC)
+    # 2. OPTION CHAIN (30-APR DATA)
     st.markdown("### 🔥 Live Nifty Option Chain (30-Apr Context)")
     
     option_data = {
@@ -124,11 +125,10 @@ cols = st.columns(6)
 
     st.table(df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal']))
 
-    # 3. PCR Section
     st.markdown("---")
     cp1, cp2 = st.columns(2)
     cp1.metric("TOTAL PCR (30-Apr)", "0.85", delta="-0.05", delta_color="inverse")
     cp2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
 
-# Function ko call karein (End of file)
+# Function ko end mein call karein (Zero spaces)
 show_watchlist_fast()
