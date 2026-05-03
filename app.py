@@ -27,42 +27,41 @@ if check_password():
 
     st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
     
-    # --- SECTION 1: GLOBAL & INDIAN INDEX LIVE (1s Refresh) ---
+    # --- NO-BLINK INDEX SECTION ---
     st.subheader("🌐 Live Indices & Commodities")
-    cols = st.columns(7)
+    index_area = st.empty() # Static container for numbers
+    
     symbols = ["^NSEI", "GIFTY=F", "^NSEBANK", "^N225", "^IXIC", "^DJI", "CL=F"]
     names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JONES", "CRUDE OIL"]
     
-    for i, sym in enumerate(symbols):
-        try:
-            ticker = yf.Ticker(sym)
-            df_index = ticker.history(period="1d")
-            
-            # Agar history se data mila toh live price, nahi toh fast_info se aakhri price
-            if not df_index.empty:
-                price_val = df_index['Close'].iloc[-1]
-            else:
-                # Backup logic: Offline/Closed ki jagah aakhri available price dikhayega
-                price_val = ticker.fast_info.get('last_price') or ticker.info.get('previousClose') or 0.0
-            
-            prev_close = ticker.info.get('previousClose') or price_val
-            change = price_val - prev_close
-            
-            price_str = f"{price_val:,.2f}"
-            display_price = f"${price_str}" if i >= 4 else price_str
-            
-            # "Offline" ki jagah hamesha number dikhayega
-            cols[i].metric(names[i], display_price, delta=f"{change:.2f}")
-            
-        except:
-            cols[i].metric(names[i], "0.00", delta="0.00")
+    with index_area.container():
+        cols = st.columns(7)
+        for i, sym in enumerate(symbols):
+            try:
+                ticker = yf.Ticker(sym)
+                # Live price fetching
+                df_index = ticker.history(period="1d")
+                if not df_index.empty:
+                    price_val = df_index['Close'].iloc[-1]
+                else:
+                    price_val = ticker.fast_info.get('last_price') or ticker.info.get('previousClose') or 0.0
+                
+                prev_close = ticker.info.get('previousClose') or price_val
+                change = price_val - prev_close
+                
+                price_str = f"{price_val:,.2f}"
+                display_price = f"${price_str}" if i >= 4 else price_str
+                cols[i].metric(names[i], display_price, delta=f"{change:.2f}")
+            except:
+                cols[i].metric(names[i], "0.00", delta="0.00")
 
     st.markdown("---")
 
-    # --- SECTION 2: OPTION CHAIN (30-Apr Data, 14s Refresh) ---
+    # --- NO-BLINK OPTION CHAIN SECTION ---
     refresh_in = 14 - (count % 14)
     st.markdown(f"### 🔥 Institutional Option Chain (30-Apr) | Update: {refresh_in}s")
-    
+    chain_area = st.empty()
+
     def get_signals(oi, price, side):
         if side == "CALL" and oi < -5000: return "⚓ Call Unwinding"
         if side == "PUT" and oi < -5000: return "⚓ Put Unwinding"
@@ -70,24 +69,25 @@ if check_password():
         if oi > 0 and price > 0: return "😈 Smart Money Entry"
         return "Neutral"
 
-    strikes = [23600, 23650, 23700, 23750, 23800, 23850, 23900, 23950, 24000, 
-               24050, 24100, 24150, 24200, 24250, 24300, 24350, 24400]
-    
-    data = {
-        "Strike": strikes,
-        "OI_CHNG_Call": [500, 1200, -6500, 2100, -8000, 4500, 12221, -8500, 46564, 3000, -5500, 1500, 4000, -7000, 2000, 1000, 500],
-        "LTP_Call": [450, 405, 360, 315, 270, 230, 190, 155, 120, 95, 75, 55, 40, 30, 20, 15, 10],
-        "LTP_Put": [10, 15, 22, 30, 42, 55, 72, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545],
-        "OI_CHNG_Put": [1500, -9000, 4000, 2500, -7500, 5000, 25429, 11188, -6500, 4000, 2100, -5500, 3000, 1200, -8000, 500, 200],
-        "Price_Change": [5, 10, 15, -5, 20, 12, -93, -88, -84, 10, 15, 20, -5, 10, 5, 2, 1]
-    }
-    
-    df = pd.DataFrame(data)
-    df['CALL Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Call'], x['Price_Change'], "CALL"), axis=1)
-    df['PUT Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Put'], x['Price_Change'], "PUT"), axis=1)
+    with chain_area.container():
+        strikes = [23600, 23650, 23700, 23750, 23800, 23850, 23900, 23950, 24000, 
+                   24050, 24100, 24150, 24200, 24250, 24300, 24350, 24400]
+        
+        data = {
+            "Strike": strikes,
+            "LTP_Call": [450, 405, 360, 315, 270, 230, 190, 155, 120, 95, 75, 55, 40, 30, 20, 15, 10],
+            "OI_CHNG_Call": [500, 1200, -6500, 2100, -8000, 4500, 12221, -8500, 46564, 3000, -5500, 1500, 4000, -7000, 2000, 1000, 500],
+            "LTP_Put": [10, 15, 22, 30, 42, 55, 72, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545],
+            "OI_CHNG_Put": [1500, -9000, 4000, 2500, -7500, 5000, 25429, 11188, -6500, 4000, 2100, -5500, 3000, 1200, -8000, 500, 200],
+            "Price_Change": [5, 10, 15, -5, 20, 12, -93, -88, -84, 10, 15, 20, -5, 10, 5, 2, 1]
+        }
+        
+        df = pd.DataFrame(data)
+        df['CALL Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Call'], x['Price_Change'], "CALL"), axis=1)
+        df['PUT Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Put'], x['Price_Change'], "PUT"), axis=1)
+        
+        st.table(df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']])
 
-    st.table(df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']])
-
-    # --- SECTION 3: PCR ---
+    # --- PCR ---
     st.markdown("---")
     st.metric("LIVE PCR (Put-Call Ratio)", "0.85", delta="-0.02")
