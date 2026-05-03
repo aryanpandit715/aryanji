@@ -78,15 +78,12 @@ def show_watchlist_fast():
     
     # Symbols aur Names ka array (Crude aur Brent included)
     # Line 80 ko aise update karein:
-
-    # 1. LIVE WATCHLIST (GIFTY=F Ticker Fix)
-    symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
+symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
     
     for i, sym in enumerate(symbols):
         ticker = yf.Ticker(sym)
         data = ticker.history(period="1d")
-        # Live price fetch for GIFT Nifty & Global
         price_val = data['Close'].iloc[-1] if not data.empty else ticker.info.get('regularMarketPrice')
         
         if price_val:
@@ -101,7 +98,6 @@ def show_watchlist_fast():
     # 2. OPTION CHAIN (30-APR DATA LOGIC)
     st.markdown("### 🔥 Live Nifty Option Chain (30-Apr Context)")
     
-    # 30 tarik ka accurate data
     option_data = {
         "Strike Price": [23850, 23900, 23950, 24000, 24050, 24100, 24150],
         "CHNG_Call": [-96.40, -93.10, -88.30, -84.85, -79.90, -75.05, -68.70],
@@ -113,7 +109,6 @@ def show_watchlist_fast():
     }
     df = pd.DataFrame(option_data)
 
-    # 3. INSTITUTIONAL SIGNALS
     def get_signals(oi_chg, price_chg):
         if oi_chg > 0 and price_chg > 0: return "😈 Smart Money"
         if oi_chg < 0 and price_chg > 0: return "🚀 Short Covering"
@@ -123,7 +118,6 @@ def show_watchlist_fast():
     df['CALL Signal'] = df.apply(lambda x: get_signals(x['CHNG IN OI_Call'], x['CHNG_Call']), axis=1)
     df['PUT Signal'] = df.apply(lambda x: get_signals(x['CHNG IN OI_Put'], x['CHNG_Put']), axis=1)
 
-    # Styling Table
     def color_signals(val):
         if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
         if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
@@ -132,7 +126,6 @@ def show_watchlist_fast():
 
     st.table(df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal']))
 
-    # 4. PCR DISPLAY
     st.markdown("---")
     cp1, cp2 = st.columns(2)
     cp1.metric("TOTAL PCR (30-Apr)", "0.85", delta="-0.05", delta_color="inverse")
