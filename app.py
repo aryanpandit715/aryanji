@@ -72,13 +72,10 @@ from streamlit_autorefresh import st_autorefresh
 st_autorefresh(interval=1000, key="devil_tick")
 
 # --- 2. LIVE WATCHLIST (SAB KUCH EK SAATH) ---
-def show_watchlist_fast():
-    # Ab total 6 columns hain: Indian + Global + Commodities
+cols = st.columns(6)
     cols = st.columns(6)
     
-    # Symbols aur Names ka array (Crude aur Brent included)
-    # Line 80 ko aise update karein:
-# 1. Symbols aur Names (Inka gap upar wali lines ke barabar rakhein)
+    # 1. LIVE WATCHLIST (Symbols & Names)
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
     
@@ -127,7 +124,11 @@ def show_watchlist_fast():
 
     st.table(df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal']))
 
+    # 3. PCR Section
     st.markdown("---")
     cp1, cp2 = st.columns(2)
     cp1.metric("TOTAL PCR (30-Apr)", "0.85", delta="-0.05", delta_color="inverse")
     cp2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
+
+# Function ko call karein (End of file)
+show_watchlist_fast()
