@@ -78,7 +78,8 @@ def show_watchlist_fast():
     
     # Symbols aur Names ka array (Crude aur Brent included)
     # Line 80 ko aise update karein:
-symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
+# 1. Symbols aur Names (Inka gap upar wali lines ke barabar rakhein)
+    symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
     
     for i, sym in enumerate(symbols):
