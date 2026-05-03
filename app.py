@@ -121,29 +121,22 @@ st.info(f"⏳ Next Institutional Signal Update in: {14 - st.session_state.pcr_co
 # --- Yahan aapka Option Chain ka table wala code aa jayega ---
 # --- 4. INSTITUTIONAL OPTION CHAIN DATA ---
 def get_option_signals(change_oi, price_chg):
-    if change_oi > 0 and price_chg > 0: return "🔥 Long Build-up"
-    elif change_oi > 0 and price_chg < 0: return "😈 Smart Money Entry"
-    elif change_oi < 0 and price_chg < 0: return "⚓ Long Unwinding"
-    elif change_oi < 0 and price_chg > 0: return "🚀 Short Covering"
+    if change_oi > 0 and price_chg > 0: 
+        return "😈 Smart Money Entry"
+    elif change_oi < 0 and price_chg < 0: 
+        return "⚓ Put Unwinding"
+    elif change_oi < 0 and price_chg > 0: 
+        return "🚀 Short Covering"
     return "Neutral"
 
 # 14-second trigger ke andar ye table load hoga
-if st.session_state.pcr_count >= 0: # Runs every refresh for 30th data display
-    st.markdown("### 📊 Institutional Data (Exp: 30-Apr)")
-    
-    # Mock Data based on 30th April context
-    data = {
-        "CALL Signal": ["🚀 Short Covering", "⚓ Call Unwinding", "😈 Devil Entry", "Neutral", "🔥 Long Build-up"],
-        "LTP (C)": [145.20, 98.40, 65.10, 42.00, 25.40],
-        "STRIKE": [24000, 24100, 24200, 24300, 24400],
-        "LTP (P)": [32.10, 54.30, 88.90, 125.60, 180.40],
-        "PUT Signal": ["🔥 Long Build-up", "Neutral", "🚀 Short Covering", "⚓ Put Unwinding", "😈 Smart Money Entry"]
-    }
-    
-    df = pd.DataFrame(data)
-    
-    # Styling Table
-# Styling Table
+if "pcr_count" not in st.session_state:
+    st.session_state.pcr_count = 0
+
+if st.session_state.pcr_count >= 0:
+    st.markdown("### 📊 Institutional Data (Live Update)")
+
+    # Styling function ko yahan define karenge taaki error na aaye
     def color_signals(val):
         if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
         if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
