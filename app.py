@@ -78,7 +78,6 @@ def show_watchlist_fast():
     
     # Symbols aur Names ka array (Crude aur Brent included)
     # Line 80 ko aise update karein:
-]
 # 1. LIVE WATCHLIST (GIFTY=F Ticker Fix)
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
