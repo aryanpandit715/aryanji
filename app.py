@@ -29,7 +29,7 @@ if check_password():
     
     # --- NO-BLINK INDEX SECTION ---
     st.subheader("🌐 Live Indices & Commodities")
-    index_area = st.empty() # Static container for numbers
+    index_area = st.empty()
     
     symbols = ["^NSEI", "GIFTY=F", "^NSEBANK", "^N225", "^IXIC", "^DJI", "CL=F"]
     names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JONES", "CRUDE OIL"]
@@ -39,8 +39,9 @@ if check_password():
         for i, sym in enumerate(symbols):
             try:
                 ticker = yf.Ticker(sym)
-                # Live price fetching
                 df_index = ticker.history(period="1d")
+                
+                # Live market mein live data, band market mein closing price
                 if not df_index.empty:
                     price_val = df_index['Close'].iloc[-1]
                 else:
@@ -62,12 +63,21 @@ if check_password():
     st.markdown(f"### 🔥 Institutional Option Chain (30-Apr) | Update: {refresh_in}s")
     chain_area = st.empty()
 
+    # Updated Logic with Colors
     def get_signals(oi, price, side):
         if side == "CALL" and oi < -5000: return "⚓ Call Unwinding"
         if side == "PUT" and oi < -5000: return "⚓ Put Unwinding"
-        if oi < 0 and price > 0: return "🚀 Short Covering"
+        if oi < 0 and price > 0: return "🚀 Short Covering" # Green in style
         if oi > 0 and price > 0: return "😈 Smart Money Entry"
+        if oi < 0 and price < 0: return "⚓ Long Covering" # Red in style
         return "Neutral"
+
+    # Style function for Colors
+    def color_signals(val):
+        if "Short Covering" in str(val): return "color: #00ff00; font-weight: bold" # Green
+        if "Long Covering" in str(val): return "color: #ff4b4b; font-weight: bold" # Red
+        if "😈" in str(val): return "color: #bd93f9;"
+        return ""
 
     with chain_area.container():
         strikes = [23600, 23650, 23700, 23750, 23800, 23850, 23900, 23950, 24000, 
@@ -86,7 +96,9 @@ if check_password():
         df['CALL Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Call'], x['Price_Change'], "CALL"), axis=1)
         df['PUT Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Put'], x['Price_Change'], "PUT"), axis=1)
         
-        st.table(df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']])
+        # Applying colors and displaying table
+        styled_df = df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']].style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
+        st.table(styled_df)
 
     # --- PCR ---
     st.markdown("---")
