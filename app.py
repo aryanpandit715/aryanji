@@ -22,7 +22,7 @@ def check_password():
     return True
 
 if check_password():
-    # 2. Dual Timer (1s for Index, 14s for Option Chain logic)
+    # 2. Dual Timer (1s for Index, 14s for Option Chain)
     count = st_autorefresh(interval=1000, key="devil_timer")
 
     st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
@@ -37,15 +37,25 @@ if check_password():
         try:
             ticker = yf.Ticker(sym)
             df_index = ticker.history(period="1d")
+            
+            # Agar history se data mila toh live price, nahi toh fast_info se aakhri price
             if not df_index.empty:
-                live = df_index['Close'].iloc[-1]
-                prev = ticker.info.get('previousClose', live)
-                delta_val = live - prev
-                cols[i].metric(names[i], f"{live:,.2f}", delta=f"{delta_val:.2f}")
+                price_val = df_index['Close'].iloc[-1]
             else:
-                cols[i].metric(names[i], "Closed")
+                # Backup logic: Offline/Closed ki jagah aakhri available price dikhayega
+                price_val = ticker.fast_info.get('last_price') or ticker.info.get('previousClose') or 0.0
+            
+            prev_close = ticker.info.get('previousClose') or price_val
+            change = price_val - prev_close
+            
+            price_str = f"{price_val:,.2f}"
+            display_price = f"${price_str}" if i >= 4 else price_str
+            
+            # "Offline" ki jagah hamesha number dikhayega
+            cols[i].metric(names[i], display_price, delta=f"{change:.2f}")
+            
         except:
-            cols[i].metric(names[i], "Offline")
+            cols[i].metric(names[i], "0.00", delta="0.00")
 
     st.markdown("---")
 
@@ -60,22 +70,21 @@ if check_password():
         if oi > 0 and price > 0: return "😈 Smart Money Entry"
         return "Neutral"
 
-    # ATM (24000) + 8 OTM Call + 8 OTM Put (Total 17 Strikes)
     strikes = [23600, 23650, 23700, 23750, 23800, 23850, 23900, 23950, 24000, 
                24050, 24100, 24150, 24200, 24250, 24300, 24350, 24400]
     
     data = {
         "Strike": strikes,
-        "OI_CHNG_Call": [500, 1200, -6000, 2100, -8000, 4500, 12221, -8500, 46564, 3000, -2000, 1500, 4000, -7000, 2000, 1000, 500],
+        "OI_CHNG_Call": [500, 1200, -6500, 2100, -8000, 4500, 12221, -8500, 46564, 3000, -5500, 1500, 4000, -7000, 2000, 1000, 500],
         "LTP_Call": [450, 405, 360, 315, 270, 230, 190, 155, 120, 95, 75, 55, 40, 30, 20, 15, 10],
         "LTP_Put": [10, 15, 22, 30, 42, 55, 72, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545],
-        "OI_CHNG_Put": [1500, -9000, 4000, 2500, -6500, 5000, 25429, 11188, -6500, 4000, 2100, -5500, 3000, 1200, -8000, 500, 200],
-        "CHNG_Price": [5, 10, 15, -5, 20, 12, -93, -88, -84, 10, 15, 20, -5, 10, 5, 2, 1] # Mock price change
+        "OI_CHNG_Put": [1500, -9000, 4000, 2500, -7500, 5000, 25429, 11188, -6500, 4000, 2100, -5500, 3000, 1200, -8000, 500, 200],
+        "Price_Change": [5, 10, 15, -5, 20, 12, -93, -88, -84, 10, 15, 20, -5, 10, 5, 2, 1]
     }
     
     df = pd.DataFrame(data)
-    df['CALL Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Call'], x['CHNG_Price'], "CALL"), axis=1)
-    df['PUT Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Put'], x['CHNG_Price'], "PUT"), axis=1)
+    df['CALL Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Call'], x['Price_Change'], "CALL"), axis=1)
+    df['PUT Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Put'], x['Price_Change'], "PUT"), axis=1)
 
     st.table(df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']])
 
