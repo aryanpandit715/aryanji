@@ -129,19 +129,23 @@ def get_option_signals(change_oi, price_chg):
         return "🚀 Short Covering"
     return "Neutral"
 
-# 14-second trigger ke andar ye table load hoga
-if "pcr_count" not in st.session_state:
-    st.session_state.pcr_count = 0
+# 14-second trigger logic
+    if "pcr_count" not in st.session_state:
+        st.session_state.pcr_count = 0
 
-if st.session_state.pcr_count >= 0:
-    st.markdown("### 📊 Institutional Data (Live Update)")
+    if st.session_state.pcr_count >= 0:
+        st.markdown("### 📊 Institutional Data (Live Update)")
 
-    # Styling function ko yahan define karenge taaki error na aaye
-    def color_signals(val):
-        if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
-        if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
-        if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
-        return ""
+        # Styling function (Define first to avoid NameError)
+        def color_signals(val):
+            if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
+            if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
+            if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
+            return ""
+
+        # Styling apply karna
+        styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
+        st.table(styled_df)
 
     styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
     st.table(styled_df)
