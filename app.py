@@ -80,15 +80,23 @@ def show_watchlist_fast():
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "NIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
 
-    for i, sym in enumerate(symbols):
-        data = yf.Ticker(sym).history(period="1d")
+  for i, sym in enumerate(symbols):
+        ticker = yf.Ticker(sym)
+        data = ticker.history(period="1d")
+        
         if not data.empty:
             price = f"{data['Close'].iloc[-1]:,.2f}"
-            # Crude aur Brent ke liye $ sign add kar diya
             display_price = f"${price}" if i >= 4 else price
             cols[i].metric(names[i], display_price)
         else:
-            cols[i].metric(names[i], "Live...")
+            # Agar data empty hai (Market Closed), toh info se price nikalo
+            price_val = ticker.info.get('regularMarketPrice') or ticker.info.get('previousClose')
+            if price_val:
+                price = f"{price_val:,.2f}"
+                display_price = f"${price}" if i >= 4 else price
+                cols[i].metric(names[i], display_price)
+            else:
+                cols[i].metric(names[i], "Offline")
 
 show_watchlist_fast()
 
