@@ -132,18 +132,24 @@ def get_option_signals(change_oi, price_chg):
 if st.session_state.pcr_count >= 0:
         st.markdown("### 📊 Institutional Data (Live Update)")
 
-        # 1. Styling function
+    if st.session_state.pcr_count >= 0:
+        st.markdown("### 📊 Institutional Data (Live Update)")
+
+        # 1. Styling function (Hamesha display se pehle define karein)
         def color_signals(val):
             if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
             if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
             if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
             return ""
 
-        # 2. Styling apply aur Table display (Sirf ek baar)
-        styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
-        st.table(styled_df)
+        # 2. Check if df exists before styling
+        if 'df' in locals() and not df.empty:
+            styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
+            st.table(styled_df)
+        else:
+            st.info("⏳ Waiting for Market Data... (Table will appear at 9:15 AM)")
 
-        # 3. PCR Calculation Display (Line 152 onwards)
+        # 3. PCR Calculation Display
         st.markdown("---")
         col_pcr1, col_pcr2 = st.columns(2)
         col_pcr1.metric("TOTAL PCR", "0.85", delta="-0.05", delta_color="inverse")
