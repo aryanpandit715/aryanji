@@ -80,24 +80,25 @@ def show_watchlist_fast():
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "NIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
 
-  for i, sym in enumerate(symbols):
+  # Yahan se replace karo (Dhyan rakhen ki spacing "cols = st.columns(6)" ke barabar ho)
+    for i, sym in enumerate(symbols):
         ticker = yf.Ticker(sym)
         data = ticker.history(period="1d")
         
         if not data.empty:
-            price = f"{data['Close'].iloc[-1]:,.2f}"
-            display_price = f"${price}" if i >= 4 else price
+            price_val = data['Close'].iloc[-1]
+        else:
+            # Agar market band hai toh purana price uthao
+            price_val = ticker.info.get('regularMarketPrice') or ticker.info.get('previousClose')
+
+        if price_val:
+            price_str = f"{price_val:,.2f}"
+            display_price = f"${price_str}" if i >= 4 else price_str
             cols[i].metric(names[i], display_price)
         else:
-            # Agar data empty hai (Market Closed), toh info se price nikalo
-            price_val = ticker.info.get('regularMarketPrice') or ticker.info.get('previousClose')
-            if price_val:
-                price = f"{price_val:,.2f}"
-                display_price = f"${price}" if i >= 4 else price
-                cols[i].metric(names[i], display_price)
-            else:
-                cols[i].metric(names[i], "Offline")
+            cols[i].metric(names[i], "Offline")
 
+    # Iske niche show_watchlist_fast() call hoga
 show_watchlist_fast()
 
 # --- 3. OPTION CHAIN & PCR (14 SECOND COUNTER) ---
