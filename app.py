@@ -129,28 +129,22 @@ def get_option_signals(change_oi, price_chg):
         return "🚀 Short Covering"
     return "Neutral"
 
-# 14-second trigger logic
-    if "pcr_count" not in st.session_state:
-        st.session_state.pcr_count = 0
-
-    if st.session_state.pcr_count >= 0:
+if st.session_state.pcr_count >= 0:
         st.markdown("### 📊 Institutional Data (Live Update)")
 
-        # Styling function (Define first to avoid NameError)
+        # 1. Styling function
         def color_signals(val):
             if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
             if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
             if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
             return ""
 
-        # Styling apply karna
+        # 2. Styling apply aur Table display (Sirf ek baar)
         styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
         st.table(styled_df)
 
-    styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
-    st.table(styled_df)
-    # PCR Calculation display
-    st.markdown("---")
-    col_pcr1, col_pcr2 = st.columns(2)
-    col_pcr1.metric("TOTAL PCR", "0.85", delta="-0.05", delta_color="inverse")
-    col_pcr2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
+        # 3. PCR Calculation Display (Line 152 onwards)
+        st.markdown("---")
+        col_pcr1, col_pcr2 = st.columns(2)
+        col_pcr1.metric("TOTAL PCR", "0.85", delta="-0.05", delta_color="inverse")
+        col_pcr2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
