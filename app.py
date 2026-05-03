@@ -78,21 +78,17 @@ def show_watchlist_fast():
     
     # Symbols aur Names ka array (Crude aur Brent included)
     # Line 80 ko aise update karein:
-# Symbols aur Names (Inka gap barabar hona chahiye)
+]
+# 1. LIVE WATCHLIST (GIFTY=F Ticker Fix)
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
-
-  # Yahan se replace karo (Dhyan rakhen ki spacing "cols = st.columns(6)" ke barabar ho)
+    
     for i, sym in enumerate(symbols):
         ticker = yf.Ticker(sym)
         data = ticker.history(period="1d")
+        # Live price fetch for GIFT Nifty & Global
+        price_val = data['Close'].iloc[-1] if not data.empty else ticker.info.get('regularMarketPrice')
         
-        if not data.empty:
-            price_val = data['Close'].iloc[-1]
-        else:
-            # Agar market band hai toh purana price uthao
-            price_val = ticker.info.get('regularMarketPrice') or ticker.info.get('previousClose')
-
         if price_val:
             price_str = f"{price_val:,.2f}"
             display_price = f"${price_str}" if i >= 4 else price_str
@@ -100,56 +96,44 @@ def show_watchlist_fast():
         else:
             cols[i].metric(names[i], "Offline")
 
-    # Iske niche show_watchlist_fast() call hoga
-show_watchlist_fast()
+    st.markdown("---")
 
-# --- 3. OPTION CHAIN & PCR (14 SECOND COUNTER) ---
-if "pcr_count" not in st.session_state:
-    st.session_state.pcr_count = 0
+    # 2. OPTION CHAIN (30-APR DATA LOGIC)
+    st.markdown("### 🔥 Live Nifty Option Chain (30-Apr Context)")
+    
+    # 30 tarik ka accurate data
+    option_data = {
+        "Strike Price": [23850, 23900, 23950, 24000, 24050, 24100, 24150],
+        "CHNG_Call": [-96.40, -93.10, -88.30, -84.85, -79.90, -75.05, -68.70],
+        "CHNG IN OI_Call": [8845, 12221, 11225, 46564, 13040, 16618, 9],
+        "LTP_Call": [317.20, 285.15, 252.00, 221.50, 193.10, 168.45, 145.10],
+        "LTP_Put": [90.90, 105.00, 122.35, 142.80, 164.35, 189.20, 215.00],
+        "CHNG IN OI_Put": [-2536, 25429, 11188, 3222, 5158, -9098, -12079],
+        "CHNG_Put": [20.75, 21.70, 26.05, 23.35, 36.10, 42.40, 48.45]
+    }
+    df = pd.DataFrame(option_data)
 
-st.session_state.pcr_count += 1
+    # 3. INSTITUTIONAL SIGNALS
+    def get_signals(oi_chg, price_chg):
+        if oi_chg > 0 and price_chg > 0: return "😈 Smart Money"
+        if oi_chg < 0 and price_chg > 0: return "🚀 Short Covering"
+        if oi_chg < 0 and price_chg < 0: return "⚓ Long Covering"
+        return "Neutral"
 
-st.divider()
-st.subheader("🔥 Live Nifty Option Chain (PCR Update: 14s)")
+    df['CALL Signal'] = df.apply(lambda x: get_signals(x['CHNG IN OI_Call'], x['CHNG_Call']), axis=1)
+    df['PUT Signal'] = df.apply(lambda x: get_signals(x['CHNG IN OI_Put'], x['CHNG_Put']), axis=1)
 
-# Logic: Page 14 baar refresh hoga (14 seconds) tab PCR update hoga
-if st.session_state.pcr_count >= 14:
-    st.session_state.pcr_count = 0
-    st.toast("Institutional PCR Updated! 😈")
+    # Styling Table
+    def color_signals(val):
+        if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
+        if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
+        if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
+        return ""
 
-# Timer display for PCR
-st.info(f"⏳ Next Institutional Signal Update in: {14 - st.session_state.pcr_count}s")
+    st.table(df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal']))
 
-# --- Yahan aapka Option Chain ka table wala code aa jayega ---
-# --- 4. INSTITUTIONAL OPTION CHAIN DATA ---
-def get_option_signals(change_oi, price_chg):
-    if change_oi > 0 and price_chg > 0: 
-        return "😈 Smart Money Entry"
-    elif change_oi < 0 and price_chg < 0: 
-        return "⚓ Put Unwinding"
-    elif change_oi < 0 and price_chg > 0: 
-        return "🚀 Short Covering"
-    return "Neutral"
-
-if st.session_state.pcr_count >= 0:
-        st.markdown("### 📊 Institutional Data (Live Update)")
-
-        # 1. Styling function
-        def color_signals(val):
-            if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
-            if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
-            if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
-            return ""
-
-        # 2. Safe Display Logic
-        if 'df' in locals() and not df.empty:
-            styled_df = df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal'])
-            st.table(styled_df)
-        else:
-            st.info("⏳ Waiting for NSE Live Data... (Market opens at 9:15 AM)")
-
-        # 3. PCR Section
-        st.markdown("---")
-        c1, c2 = st.columns(2)
-        c1.metric("TOTAL PCR", "0.85", delta="-0.05", delta_color="inverse")
-        c2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
+    # 4. PCR DISPLAY
+    st.markdown("---")
+    cp1, cp2 = st.columns(2)
+    cp1.metric("TOTAL PCR (30-Apr)", "0.85", delta="-0.05", delta_color="inverse")
+    cp2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
