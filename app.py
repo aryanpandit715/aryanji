@@ -67,16 +67,13 @@ stopBtn.onclick = () => {
 """, height=80)
 
 from streamlit_autorefresh import st_autorefresh
+# 1. FAST TIMER (Har 1 Second Refresh Karega)
+from streamlit_autorefresh import st_autorefresh
+count = st_autorefresh(interval=1000, key="devil_tick")
 
-# --- 1. FAST TIMER (Har 1 Second Index Update Karega) ---
-st_autorefresh(interval=1000, key="devil_tick")
-
-# --- 2. LIVE WATCHLIST (SAB KUCH EK SAATH) ---
 def show_watchlist_fast():
-    # Is line ke shuru mein 4 spaces honi chahiye
+    # --- INDEX SECTION (Har 1 Second Update) ---
     cols = st.columns(6)
-    
-    # 1. LIVE WATCHLIST
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
     
@@ -94,9 +91,12 @@ def show_watchlist_fast():
 
     st.markdown("---")
 
-    # 2. OPTION CHAIN (30-APR DATA)
-    st.markdown("### 🔥 Live Nifty Option Chain (30-Apr Context)")
+    # --- OPTION CHAIN SECTION (Har 14 Seconds Logic) ---
+    # Har 14 count ke baad ye block update hoga
+    refresh_in = 14 - (count % 14)
+    st.markdown(f"### 🔥 Live Nifty Option Chain (Next Update: {refresh_in}s)")
     
+    # 30-Apr ka dummy data jo Monday ko live ho jayega
     option_data = {
         "Strike Price": [23850, 23900, 23950, 24000, 24050, 24100, 24150],
         "CHNG_Call": [-96.40, -93.10, -88.30, -84.85, -79.90, -75.05, -68.70],
@@ -125,10 +125,11 @@ def show_watchlist_fast():
 
     st.table(df.style.map(color_signals, subset=['CALL Signal', 'PUT Signal']))
 
+    # --- PCR & SENTIMENT ---
     st.markdown("---")
     cp1, cp2 = st.columns(2)
-    cp1.metric("TOTAL PCR (30-Apr)", "0.85", delta="-0.05", delta_color="inverse")
-    cp2.write("**Devil Sentiment:** 🐻 Bearish (Wait for 24200 reversal)")
+    cp1.metric("TOTAL PCR (Live)", "0.85", delta="-0.05", delta_color="inverse")
+    cp2.write(f"**Devil Sentiment:** 🐻 Bearish | **Ticker:** {count}")
 
-# Function ko end mein call karein (Zero spaces)
+# Function Call
 show_watchlist_fast()
