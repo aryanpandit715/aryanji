@@ -77,7 +77,8 @@ def show_watchlist_fast():
     cols = st.columns(6)
     
     # Symbols aur Names ka array (Crude aur Brent included)
-    symbols = ["^NSEI", "^NSEBANK", "^IXIC", "NIFTY=F", "CL=F", "BZ=F"]
+    # Line 80 ko aise update karein:
+symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
 
   # Yahan se replace karo (Dhyan rakhen ki spacing "cols = st.columns(6)" ke barabar ho)
