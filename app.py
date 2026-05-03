@@ -30,12 +30,20 @@ def show_watchlist_fast():
                 cols[i].metric(names[i], "Fetching...")
         except:
             cols[i].metric(names[i], "Rate Limit")
-
-    st.markdown("---")
-
-    # --- 2. INSTITUTIONAL LOGIC (Short Covering, Unwinding, etc.) ---
-    st.markdown(f"### 🔥 Institutional Signal Tracker (Live in {14 - (count % 14)}s)")
-    
+# --- Naya Updated Logic ---
+            df_index = ticker.history(period="1d")
+            if not df_index.empty:
+                live_price = df_index['Close'].iloc[-1]
+                prev_close = ticker.info.get('previousClose', live_price)
+                change = live_price - prev_close
+                
+                price_str = f"{live_price:,.2f}"
+                display_price = f"${price_str}" if i >= 4 else price_str
+                
+                # Metric mein Price aur Change (+/-) dono dikhega
+                cols[i].metric(names[i], display_price, delta=f"{change:.2f}")
+            else:
+                cols[i].metric(names[i], "No Data")
     # Logic for your specific Emojis and Trading Signals
     def get_devil_signals(oi_chg, price_chg):
         # Unwinding Logic (OI drop significantly)
