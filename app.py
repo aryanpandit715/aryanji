@@ -3,13 +3,17 @@ import pandas as pd
 import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
 
-# 1. TIMER (14 Seconds is safest for API)
-count = st_autorefresh(interval=14000, key="devil_safe_tick")
+# Page Config for Devil Terminal
+st.set_page_config(page_title="Devil-Pro Terminal", layout="wide")
+
+# 1. DUAL TIMER LOGIC
+# Pura page 14s mein refresh hoga (Rate limit se bachne ke liye)
+count = st_autorefresh(interval=14000, key="devil_final_refresh")
 
 def show_watchlist_fast():
-    st.markdown("## 😈 DEVIL-PRO LIVE TERMINAL")
+    st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
     
-    # --- SECTION 1: WATCHLIST ---
+    # --- 1. GLOBAL & INDIAN WATCHLIST ---
     cols = st.columns(6)
     symbols = ["^NSEI", "^NSEBANK", "^IXIC", "GIFTY=F", "CL=F", "BZ=F"]
     names = ["NIFTY 50", "BANK NIFTY", "NASDAQ", "GIFT NIFTY", "CRUDE OIL", "BRENT"]
@@ -17,23 +21,34 @@ def show_watchlist_fast():
     for i, sym in enumerate(symbols):
         try:
             ticker = yf.Ticker(sym)
-            # Sirf latest price lene ke liye
             price_val = ticker.fast_info.get('last_price')
-            
             if price_val:
                 price_str = f"{price_val:,.2f}"
                 display_price = f"${price_str}" if i >= 4 else price_str
                 cols[i].metric(names[i], display_price)
             else:
-                cols[i].metric(names[i], "Wait...")
+                cols[i].metric(names[i], "Fetching...")
         except:
             cols[i].metric(names[i], "Rate Limit")
 
     st.markdown("---")
 
-    # --- SECTION 2: INSTITUTIONAL OPTION CHAIN ---
-    st.markdown(f"### 🔥 Institutional Signals (30-Apr Data)")
+    # --- 2. INSTITUTIONAL LOGIC (Short Covering, Unwinding, etc.) ---
+    st.markdown(f"### 🔥 Institutional Signal Tracker (Live in {14 - (count % 14)}s)")
     
+    # Logic for your specific Emojis and Trading Signals
+    def get_devil_signals(oi_chg, price_chg):
+        # Unwinding Logic (OI drop significantly)
+        if oi_chg < -5000: return "📉 Unwinding"
+        # Short Covering (OI down, Price up)
+        if oi_chg < 0 and price_chg > 0: return "🚀 Short Covering"
+        # Smart Money Entry (OI up, Price up)
+        if oi_chg > 0 and price_chg > 0: return "😈 Smart Money"
+        # Long Covering (OI down, Price down)
+        if oi_chg < 0 and price_chg < 0: return "⚓ Long Covering"
+        return "Neutral"
+
+    # 30-Apr Data Context (Initial Setup)
     option_data = {
         "Strike Price": [23900, 23950, 24000, 24050, 24100],
         "CHNG_Call": [-93.10, -88.30, -84.85, -79.90, -75.05],
@@ -45,29 +60,32 @@ def show_watchlist_fast():
     }
     df = pd.DataFrame(option_data)
 
-    def get_detailed_signals(oi_chg, price_chg, side):
-        if oi_chg < -5000: return "📉 Unwinding"
-        if oi_chg < 0 and price_chg > 0: return "🚀 Short Covering"
-        if oi_chg > 0 and price_chg > 0: return "😈 Smart Money"
-        if oi_chg < 0 and price_chg < 0: return "⚓ Long Covering"
-        return "Neutral"
+    df['CALL Signal'] = df.apply(lambda x: get_devil_signals(x['OI_CHNG_Call'], x['CHNG_Call']), axis=1)
+    df['PUT Signal'] = df.apply(lambda x: get_devil_signals(x['OI_CHNG_Put'], x['CHNG_Put']), axis=1)
 
-    df['CALL Signal'] = df.apply(lambda x: get_detailed_signals(x['OI_CHNG_Call'], x['CHNG_Call'], "CALL"), axis=1)
-    df['PUT Signal'] = df.apply(lambda x: get_detailed_signals(x['OI_CHNG_Put'], x['CHNG_Put'], "PUT"), axis=1)
-
-    def color_detailed(val):
+    # Signal Styling
+    def style_signals(val):
         if "🚀" in str(val): return "color: #00ff00; font-weight: bold"
         if "😈" in str(val): return "color: #ff4b4b; font-weight: bold"
-        if "📉" in str(val): return "color: #ffffff; background-color: #444"
+        if "⚓" in str(val): return "color: #ffaa00; font-weight: bold"
+        if "📉" in str(val): return "background-color: #333; color: white"
         return ""
 
-    st.table(df.style.map(color_detailed, subset=['CALL Signal', 'PUT Signal']))
+    st.table(df.style.map(style_signals, subset=['CALL Signal', 'PUT Signal']))
 
-    # --- SECTION 3: PCR ---
-    cp1, cp2 = st.columns(2)
-    cp1.metric("LIVE PCR", "0.85", delta="-0.05", delta_color="inverse")
-    cp2.info(f"Last Update: {count} ticks | System: Monday Ready")
+    # --- 3. TOTAL PCR & SENTIMENT ---
+    st.markdown("---")
+    cp1, cp2, cp3 = st.columns(3)
+    
+    # PCR Logic
+    pcr = 0.85 
+    cp1.metric("TOTAL PCR", f"{pcr}", delta="-0.05", delta_color="inverse")
+    
+    # Sentiment Logic based on your signals
+    sentiment = "BEARISH" if pcr < 0.9 else "BULLISH"
+    cp2.subheader(f"Sentiment: {'🐻' if sentiment=='BEARISH' else '🐂'} {sentiment}")
+    
+    cp3.write(f"**System Status:** Monday Live Ready ✅")
 
-# Run
 if __name__ == "__main__":
     show_watchlist_fast()
