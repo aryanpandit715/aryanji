@@ -28,7 +28,6 @@ if check_password():
     st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
     
     # --- NO-BLINK INDEX SECTION ---
-    # Isme Nifty, Bank Nifty, NASDAQ, aur baki indices hamesha numbers dikhayenge
     index_area = st.empty()
     symbols = ["^NSEI", "GIFTY=F", "^NSEBANK", "^N225", "^IXIC", "^DJI", "CL=F"]
     names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JONES", "CRUDE OIL"]
@@ -38,25 +37,22 @@ if check_password():
         for i, sym in enumerate(symbols):
             try:
                 ticker = yf.Ticker(sym)
-                df_index = ticker.history(period="1d")
+                # LIVE FETCH: history ki jagah fast_info use kar rahe hain for Monday live
+                price_val = ticker.fast_info.get('last_price')
+                prev_close = ticker.info.get('previousClose')
                 
-                # Logic: Agar history empty hai toh backup price uthayega (Closing Price)
-                if not df_index.empty:
-                    price_val = df_index['Close'].iloc[-1]
-                else:
-                    price_val = ticker.fast_info.get('last_price') or ticker.info.get('previousClose') or 0.0
-                
-                prev_close = ticker.info.get('previousClose') or price_val
+                if price_val is None or price_val == 0:
+                    df_h = ticker.history(period="1d")
+                    price_val = df_h['Close'].iloc[-1] if not df_h.empty else prev_close
+
                 change = price_val - prev_close
-                pct_change = (change / prev_close) * 100 if prev_close != 0 else 0
+                pct_change = (change / prev_close) * 100 if prev_close else 0
                 
                 price_str = f"{price_val:,.2f}"
                 display_price = f"${price_str}" if i >= 4 else price_str
-                
-                # Displaying Number with Delta (+/-)
                 cols[i].metric(names[i], display_price, delta=f"{change:.2f} ({pct_change:.2f}%)")
             except:
-                cols[i].metric(names[i], "0.00", delta="0.00")
+                cols[i].metric(names[i], "Fetching...")
 
     st.markdown("---")
 
@@ -65,24 +61,14 @@ if check_password():
     st.markdown(f"### 🔥 Institutional Option Chain (30-Apr) | Update: {refresh_in}s")
     chain_area = st.empty()
 
-    # Logic for Short Covering, Long Covering, etc.
     def get_signals(oi, price, side):
-        # ⚓ Call/Put Unwinding (OI tezi se kam hona)
         if side == "CALL" and oi < -5000: return "⚓ Call Unwinding"
         if side == "PUT" and oi < -5000: return "⚓ Put Unwinding"
-        
-        # 🚀 Short Covering (OI down, Price up)
         if oi < 0 and price > 0: return "🚀 Short Covering"
-        
-        # 😈 Smart Money Entry (OI up, Price up)
         if oi > 0 and price > 0: return "😈 Smart Money Entry"
-        
-        # ⚓ Long Covering (OI down, Price down)
         if oi < 0 and price < 0: return "⚓ Long Covering"
-        
         return "Neutral"
 
-    # Style: Colors for signals
     def style_output(val):
         if "Short Covering" in str(val): return "color: #00ff00; font-weight: bold;" # Green
         if "Long Covering" in str(val): return "color: #ff4b4b; font-weight: bold;" # Red
@@ -90,10 +76,10 @@ if check_password():
         return ""
 
     with chain_area.container():
-        # ATM + 8 OTM logic (Total 17 strikes)
         strikes = [23600, 23650, 23700, 23750, 23800, 23850, 23900, 23950, 24000, 
                    24050, 24100, 24150, 24200, 24250, 24300, 24350, 24400]
         
+        # Ye data Monday live feed se connect hona chahiye (Abhi 30-Apr sample hai)
         data = {
             "Strike": strikes,
             "LTP_Call": [450, 405, 360, 315, 270, 230, 190, 155, 120, 95, 75, 55, 40, 30, 20, 15, 10],
@@ -107,7 +93,6 @@ if check_password():
         df['CALL Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Call'], x['Price_Change'], "CALL"), axis=1)
         df['PUT Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Put'], x['Price_Change'], "PUT"), axis=1)
         
-        # Displaying table with styled signals
         st.table(df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']].style.map(style_output, subset=['CALL Signal', 'PUT Signal']))
 
     # --- PCR SECTION ---
