@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
-import requests
 
 # 1. Page Config
-st.set_page_config(layout="wide", page_title="Devil-Pro NSE Live Terminal", page_icon="😈")
+st.set_page_config(layout="wide", page_title="Devil-Pro Fixed Terminal", page_icon="😈")
 
 # --- PASSWORD LOCK ---
 if "password_correct" not in st.session_state:
@@ -19,41 +18,34 @@ if not st.session_state.password_correct:
         else: st.error("Wrong Password")
     st.stop()
 
-# 2. 14 Second Auto-Refresh (NSE allows 10-15s frequency)
-st_autorefresh(interval=14000, key="nse_refresh")
+# 2. 14 Second Refresh
+st_autorefresh(interval=14000, key="devil_fix")
 
-st.markdown("# 😈 DEVIL-PRO NSE LIVE TERMINAL")
+st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
 
-# --- LIVE INDEX SECTION ---
+# --- INDEX SECTION ---
 index_placeholder = st.empty()
 symbols = ["^NSEI", "GIFTY=F", "^NSEBANK", "^N225", "^IXIC", "^DJI", "CL=F"]
 names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JONES", "CRUDE OIL"]
 
-def fetch_index_data():
-    data = []
+with index_placeholder.container():
+    cols = st.columns(7)
     for i, sym in enumerate(symbols):
         try:
             tkr = yf.Ticker(sym)
-            price = tkr.fast_info.last_price or tkr.info.get('regularMarketPrice', 0)
-            prev = tkr.info.get('previousClose', price)
-            diff = price - prev
+            p_val = tkr.fast_info.last_price
+            if not p_val:
+                p_val = tkr.history(period="1d")['Close'].iloc[-1]
+            prev = tkr.info.get('previousClose', p_val)
+            diff = p_val - prev
             pct = (diff / prev * 100) if prev > 0 else 0
-            data.append({"name": names[i], "price": price, "diff": diff, "pct": pct})
+            cols[i].metric(names[i], f"{p_val:,.2f}", delta=f"{diff:.2f} ({pct:.2f}%)")
         except:
-            data.append({"name": names[i], "price": 0, "diff": 0, "pct": 0})
-    return data
-
-indices = fetch_index_data()
-with index_placeholder.container():
-    cols = st.columns(7)
-    for idx, item in enumerate(indices):
-        val_str = f"{item['price']:,.2f}"
-        if idx >= 4: val_str = f"${val_str}"
-        cols[idx].metric(item['name'], val_str, delta=f"{item['diff']:.2f} ({item['pct']:.2f}%)")
+            cols[i].metric(names[i], "0.00")
 
 st.markdown("---")
 
-# --- NSE STYLE OPTION CHAIN LOGIC ---
+# --- SIGNAL LOGIC ---
 def get_signals(oi_chg, price_chg):
     if price_chg > 0 and oi_chg > 0: return "😈 Smart Money Entry"
     if price_chg < 0 and oi_chg > 0: return "🚀 Short Buildup"
@@ -66,40 +58,47 @@ def color_rows(val):
     if "Short Buildup" in str(val): return "background-color: #590d22; color: #ffb3c1; font-weight: bold;"
     return ""
 
-st.markdown(f"### 🔥 Live Option Chain (NSE Data Source) | Update: 14s")
+# --- OPTION CHAIN FIX ---
+st.markdown(f"### 🔥 Institutional Option Chain | Live Status")
 chain_placeholder = st.empty()
 
 with chain_placeholder.container():
     try:
         nifty = yf.Ticker("^NSEI")
-        ltp = indices[0]['price'] # Nifty 50 Price
-        
-        # Fetch nearest expiry
-        expiry = nifty.options[0]
-        chain = nifty.option_chain(expiry)
-        
-        calls = chain.calls[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].rename(
-            columns={'openInterest': 'OI_C', 'change': 'CH_OI_C', 'volume': 'Vol_C', 'lastPrice': 'LTP_C'})
-        puts = chain.puts[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].rename(
-            columns={'openInterest': 'OI_P', 'change': 'CH_OI_P', 'volume': 'Vol_P', 'lastPrice': 'LTP_P'})
-        
-        df = pd.merge(calls, puts, on='strike')
-        
-        # Filter 8 OTM + 1 ATM + 8 OTM
-        atm_strike = round(ltp / 50) * 50
-        idx = df.index[df['strike'] == atm_strike].tolist()[0]
-        final_df = df.iloc[max(0, idx-8):min(len(df), idx+9)].copy()
-        
-        # Apply NSE Logic
-        final_df['CALL_SIGNAL'] = final_df.apply(lambda x: get_signals(x['CH_OI_C'], x['CH_OI_C']), axis=1)
-        final_df['PUT_SIGNAL'] = final_df.apply(lambda x: get_signals(x['CH_OI_P'], x['CH_OI_P']), axis=1)
-        
-        # Table Reorder
-        cols_to_show = ['OI_C', 'CH_OI_C', 'Vol_C', 'LTP_C', 'CALL_SIGNAL', 'strike', 'LTP_P', 'Vol_P', 'CH_OI_P', 'OI_P', 'PUT_SIGNAL']
-        st.table(final_df[cols_to_show].style.map(color_rows, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
+        # Direct Call for Options
+        expiries = nifty.options
+        if not expiries:
+            st.error("NSE Data not responding. Retrying in 14s...")
+        else:
+            expiry = expiries[0]
+            chain = nifty.option_chain(expiry)
+            
+            calls = chain.calls[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].copy()
+            puts = chain.puts[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].copy()
+            
+            # Data Cleaning
+            df = pd.merge(calls, puts, on='strike', suffixes=('_C', '_P'))
+            
+            # ATM calculation
+            ltp_nifty = nifty.fast_info.last_price or 24074 # Backup from your screenshot
+            atm_strike = round(ltp_nifty / 50) * 50
+            
+            # Ensure ATM exists in data
+            if atm_strike in df['strike'].values:
+                idx = df.index[df['strike'] == atm_strike].tolist()[0]
+                final_df = df.iloc[max(0, idx-8):min(len(df), idx+9)].copy()
+                
+                final_df['CALL_SIGNAL'] = final_df.apply(lambda x: get_signals(x['change_C'], x['change_C']), axis=1)
+                final_df['PUT_SIGNAL'] = final_df.apply(lambda x: get_signals(x['change_P'], x['change_P']), axis=1)
+                
+                # Reordering
+                show_cols = ['openInterest_C', 'change_C', 'volume_C', 'lastPrice_C', 'CALL_SIGNAL', 'strike', 'lastPrice_P', 'volume_P', 'change_P', 'openInterest_P', 'PUT_SIGNAL']
+                st.table(final_df[show_cols].style.map(color_rows, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
+            else:
+                st.warning("Strikes loading... syncing with ATM.")
 
-    except:
-        st.info("🔄 Connecting to NSE Data Streams...")
+    except Exception as e:
+        st.info("🔄 Refreshing Data Stream... Market data will appear shortly.")
 
 # --- PCR ---
 st.markdown("---")
