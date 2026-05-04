@@ -36,27 +36,27 @@ if check_password():
         cols = st.columns(7)
         for i, sym in enumerate(symbols):
             try:
-                ticker = yf.Ticker(sym)
-                # LIVE FETCH: history ki jagah fast_info use kar rahe hain for Monday live
-                price_val = ticker.fast_info.get('last_price')
-                prev_close = ticker.info.get('previousClose')
-                
-                if price_val is None or price_val == 0:
-                    df_h = ticker.history(period="1d")
-                    price_val = df_h['Close'].iloc[-1] if not df_h.empty else prev_close
+                tkr = yf.Ticker(sym)
+                # Live Market logic for Monday
+                # Pehle fast_info try karega, fir history
+                price_val = tkr.fast_info.get('last_price')
+                if not price_val or price_val == 0:
+                    hist = tkr.history(period="1d")
+                    price_val = hist['Close'].iloc[-1] if not hist.empty else tkr.info.get('previousClose', 0.0)
 
+                prev_close = tkr.info.get('previousClose') or price_val
                 change = price_val - prev_close
-                pct_change = (change / prev_close) * 100 if prev_close else 0
+                pct = (change / prev_close * 100) if prev_close else 0
                 
-                price_str = f"{price_val:,.2f}"
-                display_price = f"${price_str}" if i >= 4 else price_str
-                cols[i].metric(names[i], display_price, delta=f"{change:.2f} ({pct_change:.2f}%)")
+                p_str = f"{price_val:,.2f}"
+                display = f"${p_str}" if i >= 4 else p_str
+                cols[i].metric(names[i], display, delta=f"{change:.2f} ({pct:.2f}%)")
             except:
-                cols[i].metric(names[i], "Fetching...")
+                cols[i].metric(names[i], "Live Data Error")
 
     st.markdown("---")
 
-    # --- NO-BLINK OPTION CHAIN SECTION (14s Refresh) ---
+    # --- NO-BLINK OPTION CHAIN SECTION ---
     refresh_in = 14 - (count % 14)
     st.markdown(f"### 🔥 Institutional Option Chain (30-Apr) | Update: {refresh_in}s")
     chain_area = st.empty()
@@ -79,7 +79,7 @@ if check_password():
         strikes = [23600, 23650, 23700, 23750, 23800, 23850, 23900, 23950, 24000, 
                    24050, 24100, 24150, 24200, 24250, 24300, 24350, 24400]
         
-        # Ye data Monday live feed se connect hona chahiye (Abhi 30-Apr sample hai)
+        # Sample Data for UI - Monday Live Feed connection needed
         data = {
             "Strike": strikes,
             "LTP_Call": [450, 405, 360, 315, 270, 230, 190, 155, 120, 95, 75, 55, 40, 30, 20, 15, 10],
@@ -95,6 +95,6 @@ if check_password():
         
         st.table(df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']].style.map(style_output, subset=['CALL Signal', 'PUT Signal']))
 
-    # --- PCR SECTION ---
+    # --- PCR ---
     st.markdown("---")
     st.metric("LIVE PCR (Put-Call Ratio)", "0.85", delta="-0.02")
