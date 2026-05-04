@@ -33,10 +33,7 @@ with index_area.container():
     for i, sym in enumerate(symbols):
         try:
             tkr = yf.Ticker(sym)
-            p_val = tkr.fast_info.last_price
-            if p_val is None or p_val == 0:
-                p_val = tkr.info.get('regularMarketPrice') or tkr.info.get('previousClose', 0)
-            
+            p_val = tkr.fast_info.last_price or tkr.info.get('regularMarketPrice', 0)
             prev = tkr.info.get('previousClose') or p_val
             diff = p_val - prev
             pct = (diff / prev * 100) if prev else 0
@@ -46,7 +43,7 @@ with index_area.container():
 
 st.markdown("---")
 
-# --- NSE LOGIC FUNCTIONS ---
+# --- INSTITUTIONAL LOGIC ---
 def get_logic_signal(oi_chg, price_chg):
     if price_chg > 0 and oi_chg > 0: return "😈 Smart Money Entry"
     if price_chg < 0 and oi_chg > 0: return "🚀 Short Buildup"
@@ -55,13 +52,13 @@ def get_logic_signal(oi_chg, price_chg):
     return "Neutral"
 
 def color_logic(val):
-    if "Smart Money" in str(val): return "background-color: #2b5329; color: white;" # Dark Green
-    if "Short Buildup" in str(val): return "background-color: #5e1919; color: white;" # Dark Red
-    if "Short Covering" in str(val): return "color: #00d2ff;" # Blue
+    if "Smart Money" in str(val): return "background-color: #1b4332; color: #b7e4c7; font-weight: bold;"
+    if "Short Buildup" in str(val): return "background-color: #590d22; color: #ffb3c1; font-weight: bold;"
+    if "Short Covering" in str(val): return "color: #00d2ff;"
     return ""
 
-# --- OPTION CHAIN (1 ATM + 8 OTM CALL + 8 OTM PUT) ---
-st.markdown(f"### 🔥 Institutional Option Chain (30-Apr) | Refresh: 14s")
+# --- LIVE OPTION CHAIN (VOLUME + OI + CHNG IN OI) ---
+st.markdown(f"### 🔥 Institutional Option Chain | Refresh: 14s")
 chain_placeholder = st.empty()
 
 with chain_placeholder.container():
@@ -71,35 +68,35 @@ with chain_placeholder.container():
         expiry = nifty.options[0]
         opts = nifty.option_chain(expiry)
         
-        calls = opts.calls[['strike', 'lastPrice', 'openInterest', 'change']].rename(
-            columns={'lastPrice': 'LTP_C', 'openInterest': 'OI_C', 'change': 'CHNG_C'})
-        puts = opts.puts[['strike', 'lastPrice', 'openInterest', 'change']].rename(
-            columns={'lastPrice': 'LTP_P', 'openInterest': 'OI_P', 'change': 'CHNG_P'})
+        # Fetching Calls and Puts with Volume
+        calls = opts.calls[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].rename(
+            columns={'openInterest': 'OI_Call', 'change': 'CHNG_OI_Call', 'volume': 'Vol_Call', 'lastPrice': 'LTP_Call'})
+        
+        puts = opts.puts[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].rename(
+            columns={'openInterest': 'OI_Put', 'change': 'CHNG_OI_Put', 'volume': 'Vol_Put', 'lastPrice': 'LTP_Put'})
         
         df_full = pd.merge(calls, puts, on='strike')
 
-        # ATM Strike Calculation
+        # ATM Logic: 1 ATM + 8 OTM Each Side
         atm_strike = round(ltp_nifty / 50) * 50
-        
-        # Get Index of ATM
         idx = df_full.index[df_full['strike'] == atm_strike].tolist()[0]
-        
-        # Filter: 8 OTM Call (Above ATM) + ATM + 8 OTM Put (Below ATM)
-        # In Nifty, OTM Calls are higher strikes, OTM Puts are lower strikes.
-        start_idx = max(0, idx - 8)
-        end_idx = min(len(df_full), idx + 9)
-        df = df_full.iloc[start_idx:end_idx].copy()
+        df = df_full.iloc[max(0, idx - 8):min(len(df_full), idx + 9)].copy()
 
-        # Apply Signal Logic
-        df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_C'], x['CHNG_C']), axis=1)
-        df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_P'], x['CHNG_P']), axis=1)
+        # Signals
+        df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_OI_Call'], x['CHNG_OI_Call']), axis=1)
+        df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_OI_Put'], x['CHNG_OI_Put']), axis=1)
 
-        # Formatting for display
-        final_df = df[['strike', 'OI_C', 'LTP_C', 'CALL_SIGNAL', 'LTP_P', 'OI_P', 'PUT_SIGNAL']]
-        st.table(final_df.style.map(color_logic, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
+        # Final Table Reordered like NSE Screenshot
+        final_columns = [
+            'OI_Call', 'CHNG_OI_Call', 'Vol_Call', 'LTP_Call', 'CALL_SIGNAL', 
+            'strike', 
+            'LTP_Put', 'Vol_Put', 'CHNG_OI_Put', 'OI_Put', 'PUT_SIGNAL'
+        ]
         
-    except Exception as e:
-        st.warning("Fetching Live Option Chain Data...")
+        st.table(df[final_columns].style.map(color_logic, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
+        
+    except:
+        st.info("Streaming Live Market Data... Please wait.")
 
 # --- PCR ---
 st.markdown("---")
