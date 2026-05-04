@@ -103,3 +103,10 @@ with chain_placeholder.container():
 # --- PCR ---
 st.markdown("---")
 st.metric("LIVE PCR (Nifty 50)", "0.85", delta="-0.02")
+import yfinance as yf
+
+# Nifty ka data mangvao
+nifty = yf.Ticker("^NSEI")
+live_price = nifty.fast_info.last_price
+
+print(f"Nifty ka live price hai: {live_price}")
