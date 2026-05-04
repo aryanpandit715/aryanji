@@ -9,7 +9,6 @@ st.set_page_config(layout="wide", page_title="Devil-Pro Terminal")
 # --- PASSWORD LOCK ---
 if "password_correct" not in st.session_state:
     st.session_state.password_correct = False
-
 if not st.session_state.password_correct:
     pw = st.text_input("Enter Password", type="password")
     if st.button("Login"):
@@ -19,7 +18,7 @@ if not st.session_state.password_correct:
         else: st.error("Wrong Password")
     st.stop()
 
-# 2. Dual Timer (1s Index, 14s Option Chain)
+# 2. Dual Timer (1s for Index, 14s for Option Chain)
 count = st_autorefresh(interval=1000, key="devil_timer")
 
 st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
@@ -34,58 +33,66 @@ with index_area.container():
     for i, sym in enumerate(symbols):
         try:
             tkr = yf.Ticker(sym)
-            price_val = tkr.fast_info.last_price or tkr.info.get('regularMarketPrice', 0)
-            prev_close = tkr.info.get('previousClose') or price_val
-            change = price_val - prev_close
-            pct = (change / prev_close * 100) if prev_close else 0
-            cols[i].metric(names[i], f"{price_val:,.2f}", delta=f"{change:.2f} ({pct:.2f}%)")
+            p_val = tkr.fast_info.last_price or tkr.info.get('regularMarketPrice', 0)
+            prev = tkr.info.get('previousClose') or p_val
+            diff = p_val - prev
+            pct = (diff / prev * 100) if prev else 0
+            cols[i].metric(names[i], f"{p_val:,.2f}", delta=f"{diff:.2f} ({pct:.2f}%)")
         except:
             cols[i].metric(names[i], "0.00")
 
 st.markdown("---")
 
-# --- LIVE OPTION CHAIN (OI ADDED) ---
-refresh_in = 14 - (count % 14)
-st.markdown(f"### 🔥 Institutional Option Chain (Live OI) | Update: {refresh_in}s")
-chain_area = st.empty()
-
-def get_signals(oi_chg, side):
-    # OI Change ke basis par signals
-    if oi_chg < -5000: return "⚓ " + side + " Unwinding"
-    if oi_chg > 10000: return "😈 Smart Money Entry"
-    if oi_chg > 0: return "🚀 Short Covering"
+# --- INSTITUTIONAL LOGIC (Based on NSE Screenshot) ---
+def get_logic_signal(oi_chg, price_chg, side):
+    # Long Buildup: Price Up, OI Up
+    if price_chg > 0 and oi_chg > 0: return "😈 Smart Money Entry"
+    # Short Buildup: Price Down, OI Up
+    if price_chg < 0 and oi_chg > 0: return "🚀 Short Buildup"
+    # Short Covering: Price Up, OI Down
+    if price_chg > 0 and oi_chg < 0: return "🔥 Short Covering"
+    # Long Unwinding: Price Down, OI Down
+    if price_chg < 0 and oi_chg < 0: return "⚓ Long Unwinding"
     return "Neutral"
 
-def style_output(val):
-    if "Short Covering" in str(val): return "color: #00ff00; font-weight: bold;"
-    if "Long Covering" in str(val): return "color: #ff4b4b; font-weight: bold;"
-    if "Smart Money" in str(val): return "color: #bd93f9; font-weight: bold;"
+def color_logic(val):
+    if "Smart Money" in str(val): return "color: #00ff00; font-weight: bold;" # Green
+    if "Short Buildup" in str(val): return "color: #ff4b4b; font-weight: bold;" # Red
+    if "Short Covering" in str(val): return "color: #00d2ff; font-weight: bold;" # Blue
+    if "Unwinding" in str(val): return "color: #ffaa00; font-weight: bold;" # Orange
     return ""
+
+# --- LIVE OPTION CHAIN ---
+refresh_in = 14 - (count % 14)
+st.markdown(f"### 🔥 Institutional Option Chain (Live Logic) | Update: {refresh_in}s")
+chain_area = st.empty()
 
 with chain_area.container():
     try:
         nifty = yf.Ticker("^NSEI")
-        expiry = nifty.options[0] # Sabse pass wali expiry
+        expiry = nifty.options[0]
         opts = nifty.option_chain(expiry)
         
         calls = opts.calls[['strike', 'lastPrice', 'openInterest', 'change']].rename(
-            columns={'lastPrice': 'LTP_Call', 'openInterest': 'OI_Call', 'change': 'Chng_Call'})
+            columns={'lastPrice': 'LTP_C', 'openInterest': 'OI_C', 'change': 'CHNG_C'})
         puts = opts.puts[['strike', 'lastPrice', 'openInterest', 'change']].rename(
-            columns={'lastPrice': 'LTP_Put', 'openInterest': 'OI_Put', 'change': 'Chng_Put'})
+            columns={'lastPrice': 'LTP_P', 'openInterest': 'OI_P', 'change': 'CHNG_P'})
         
         df = pd.merge(calls, puts, on='strike')
         
-        # ATM strikes filter (+/- 500 points)
-        curr_nifty = nifty.fast_info.last_price
-        df = df[(df['strike'] >= curr_nifty - 500) & (df['strike'] <= curr_nifty + 500)]
+        # Current Market Price filter
+        curr_price = nifty.fast_info.last_price
+        df = df[(df['strike'] >= curr_price - 300) & (df['strike'] <= curr_price + 300)]
         
-        df['CALL Signal'] = df['Chng_Call'].apply(lambda x: get_signals(x, "Call"))
-        df['PUT Signal'] = df['Chng_Put'].apply(lambda x: get_signals(x, "Put"))
+        # Apply NSE Logic
+        df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_C'], x['CHNG_C'], "Call"), axis=1)
+        df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_P'], x['CHNG_P'], "Put"), axis=1)
 
-        st.table(df[['strike', 'OI_Call', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'OI_Put', 'PUT Signal']].style.map(style_output, subset=['CALL Signal', 'PUT Signal']))
+        # Final Table
+        st.table(df[['strike', 'OI_C', 'LTP_C', 'CALL_SIGNAL', 'LTP_P', 'OI_P', 'PUT_SIGNAL']].style.map(color_logic))
         
     except:
-        st.error("Market Data Refreshing...")
+        st.info("Market data is streaming... Please wait.")
 
 # --- PCR ---
 st.markdown("---")
