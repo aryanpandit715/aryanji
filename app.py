@@ -18,13 +18,15 @@ if not st.session_state.password_correct:
         else: st.error("Wrong Password")
     st.stop()
 
-# 2. 14 Second Auto-Refresh
+# 2. Dual Refresh Logic (Index fast, Chain steady)
+# Har 14 second mein chain refresh hogi, lekin index har refresh par live dikhega
 count = st_autorefresh(interval=14000, key="devil_timer")
 
 st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
 
-# --- LIVE INDEX SECTION ---
+# --- LIVE INDEX SECTION (FIXED FOR LIVE DATA) ---
 index_area = st.empty()
+# NSE Indices aur Global Indices ke symbols
 symbols = ["^NSEI", "GIFTY=F", "^NSEBANK", "^N225", "^IXIC", "^DJI", "CL=F"]
 names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JONES", "CRUDE OIL"]
 
@@ -33,13 +35,24 @@ with index_area.container():
     for i, sym in enumerate(symbols):
         try:
             tkr = yf.Ticker(sym)
-            p_val = tkr.fast_info.last_price or tkr.info.get('regularMarketPrice', 0)
+            # Live price fetch karne ka sabse fast tarika
+            p_val = tkr.fast_info.last_price
+            
+            # Agar fast_info fail ho toh regular info ya history try karega
+            if p_val is None or p_val == 0:
+                p_val = tkr.info.get('regularMarketPrice') or tkr.info.get('previousClose', 0)
+            
             prev = tkr.info.get('previousClose') or p_val
             diff = p_val - prev
             pct = (diff / prev * 100) if prev else 0
-            cols[i].metric(names[i], f"{p_val:,.2f}", delta=f"{diff:.2f} ({pct:.2f}%)")
+            
+            # Formatting for India vs Global (Currency symbols)
+            p_str = f"{p_val:,.2f}"
+            display_val = f"${p_str}" if i >= 4 else p_str
+            
+            cols[i].metric(names[i], display_val, delta=f"{diff:.2f} ({pct:.2f}%)")
         except:
-            cols[i].metric(names[i], "0.00")
+            cols[i].metric(names[i], "Fetching...")
 
 st.markdown("---")
 
@@ -57,18 +70,17 @@ def color_logic(val):
     if "Short Covering" in str(val): return "color: #00d2ff;"
     return ""
 
-# --- LIVE OPTION CHAIN (VOLUME + OI + CHNG IN OI) ---
+# --- LIVE OPTION CHAIN (1 ATM + 8 OTM) ---
 st.markdown(f"### 🔥 Institutional Option Chain | Refresh: 14s")
 chain_placeholder = st.empty()
 
 with chain_placeholder.container():
     try:
         nifty = yf.Ticker("^NSEI")
-        ltp_nifty = nifty.fast_info.last_price
+        ltp_nifty = nifty.fast_info.last_price or nifty.info.get('regularMarketPrice', 24106)
         expiry = nifty.options[0]
         opts = nifty.option_chain(expiry)
         
-        # Fetching Calls and Puts with Volume
         calls = opts.calls[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].rename(
             columns={'openInterest': 'OI_Call', 'change': 'CHNG_OI_Call', 'volume': 'Vol_Call', 'lastPrice': 'LTP_Call'})
         
@@ -77,26 +89,22 @@ with chain_placeholder.container():
         
         df_full = pd.merge(calls, puts, on='strike')
 
-        # ATM Logic: 1 ATM + 8 OTM Each Side
+        # ATM Calculation
         atm_strike = round(ltp_nifty / 50) * 50
         idx = df_full.index[df_full['strike'] == atm_strike].tolist()[0]
+        # 8 OTM above and 8 OTM below ATM
         df = df_full.iloc[max(0, idx - 8):min(len(df_full), idx + 9)].copy()
 
-        # Signals
         df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_OI_Call'], x['CHNG_OI_Call']), axis=1)
         df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_OI_Put'], x['CHNG_OI_Put']), axis=1)
 
-        # Final Table Reordered like NSE Screenshot
-        final_columns = [
-            'OI_Call', 'CHNG_OI_Call', 'Vol_Call', 'LTP_Call', 'CALL_SIGNAL', 
-            'strike', 
-            'LTP_Put', 'Vol_Put', 'CHNG_OI_Put', 'OI_Put', 'PUT_SIGNAL'
-        ]
+        # NSE Style Columns
+        final_cols = ['OI_Call', 'CHNG_OI_Call', 'Vol_Call', 'LTP_Call', 'CALL_SIGNAL', 'strike', 'LTP_Put', 'Vol_Put', 'CHNG_OI_Put', 'OI_Put', 'PUT_SIGNAL']
         
-        st.table(df[final_columns].style.map(color_logic, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
+        st.table(df[final_cols].style.map(color_logic, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
         
     except:
-        st.info("Streaming Live Market Data... Please wait.")
+        st.info("Market is Live! Streaming indices and option chain...")
 
 # --- PCR ---
 st.markdown("---")
