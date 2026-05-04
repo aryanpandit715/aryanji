@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 from streamlit_autorefresh import st_autorefresh
+import time
 
 # 1. Page Configuration
-st.set_page_config(layout="wide", page_title="Devil-Pro Live Terminal")
+st.set_page_config(layout="wide", page_title="Devil-Pro Live Terminal", page_icon="😈")
 
 # --- PASSWORD LOCK ---
 if "password_correct" not in st.session_state:
@@ -18,12 +19,31 @@ if not st.session_state.password_correct:
         else: st.error("Wrong Password")
     st.stop()
 
-# 2. Dual Refresh Logic (14 Seconds for Live Updates)
-count = st_autorefresh(interval=14000, key="devil_timer")
+# 2. 14 Second Auto-Refresh
+st_autorefresh(interval=14000, key="devil_refresh")
 
 st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
 
-# --- LIVE INDEX SECTION (Indices always on top) ---
+# --- HELPER FUNCTION FOR LIVE DATA ---
+def get_live_price(symbol):
+    try:
+        tkr = yf.Ticker(symbol)
+        # Try multiple ways to get price
+        price = tkr.fast_info.last_price
+        if price is None or price <= 0:
+            # Backup: Get last 1 day history
+            hist = tkr.history(period="1d", interval="1m")
+            if not hist.empty:
+                price = hist['Close'].iloc[-1]
+            else:
+                price = tkr.info.get('regularMarketPrice', 0)
+        
+        prev = tkr.info.get('previousClose', price)
+        return price, prev
+    except:
+        return 0.0, 0.0
+
+# --- LIVE INDEX SECTION ---
 index_placeholder = st.empty()
 symbols = ["^NSEI", "GIFTY=F", "^NSEBANK", "^N225", "^IXIC", "^DJI", "CL=F"]
 names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JONES", "CRUDE OIL"]
@@ -31,26 +51,20 @@ names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JO
 with index_placeholder.container():
     cols = st.columns(7)
     for i, sym in enumerate(symbols):
-        try:
-            tkr = yf.Ticker(sym)
-            # Fast info for live price
-            p_val = tkr.fast_info.last_price
-            if p_val is None or p_val == 0:
-                p_val = tkr.info.get('regularMarketPrice') or tkr.info.get('previousClose', 0)
-            
-            prev = tkr.info.get('previousClose') or p_val
-            diff = p_val - prev
-            pct = (diff / prev * 100) if prev else 0
-            
-            p_str = f"{p_val:,.2f}"
-            display_val = f"${p_str}" if i >= 4 else p_str
-            cols[i].metric(names[i], display_val, delta=f"{diff:.2f} ({pct:.2f}%)")
-        except:
-            cols[i].metric(names[i], "Fetching...")
+        p_val, prev = get_live_price(sym)
+        diff = p_val - prev
+        pct = (diff / prev * 100) if prev > 0 else 0
+        
+        # Color formatting
+        label = names[i]
+        val_str = f"{p_val:,.2f}"
+        if i >= 4: val_str = f"${val_str}" # Global indices
+        
+        cols[i].metric(label, val_str, delta=f"{diff:.2f} ({pct:.2f}%)")
 
 st.markdown("---")
 
-# --- TRADING LOGIC (OI + PRICE ACTION) ---
+# --- SIGNAL LOGIC ---
 def get_logic_signal(oi_chg, price_chg):
     if price_chg > 0 and oi_chg > 0: return "😈 Smart Money Entry"
     if price_chg < 0 and oi_chg > 0: return "🚀 Short Buildup"
@@ -64,49 +78,43 @@ def color_style(val):
     if "Short Covering" in str(val): return "color: #00d2ff;"
     return ""
 
-# --- LIVE OPTION CHAIN (1 ATM + 8 OTM) ---
-st.markdown(f"### 🔥 Institutional Option Chain | Live Refresh: 14s")
+# --- LIVE OPTION CHAIN ---
+st.markdown(f"### 🔥 Institutional Option Chain | Refresh: 14s")
 chain_placeholder = st.empty()
 
 with chain_placeholder.container():
     try:
         nifty = yf.Ticker("^NSEI")
-        # Get real-time Nifty price for ATM calculation
-        current_nifty = nifty.fast_info.last_price or nifty.info.get('regularMarketPrice', 24106)
+        ltp_nifty, _ = get_live_price("^NSEI")
         
-        expiry = nifty.options[0] # Nearest Expiry
+        expiry = nifty.options[0]
         opts = nifty.option_chain(expiry)
         
         calls = opts.calls[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].rename(
-            columns={'openInterest': 'OI_Call', 'change': 'CH_OI_Call', 'volume': 'Vol_Call', 'lastPrice': 'LTP_Call'})
-        
+            columns={'openInterest': 'OI_Call', 'change': 'CH_OI_C', 'volume': 'Vol_C', 'lastPrice': 'LTP_C'})
         puts = opts.puts[['strike', 'openInterest', 'change', 'volume', 'lastPrice']].rename(
-            columns={'openInterest': 'OI_Put', 'change': 'CH_OI_Put', 'volume': 'Vol_Put', 'lastPrice': 'LTP_Put'})
+            columns={'openInterest': 'OI_Put', 'change': 'CH_OI_P', 'volume': 'Vol_P', 'lastPrice': 'LTP_P'})
         
         df_full = pd.merge(calls, puts, on='strike')
 
-        # Find ATM Strike (Nearest 50)
-        atm_strike = round(current_nifty / 50) * 50
-        idx = df_full.index[df_full['strike'] == atm_strike].tolist()[0]
+        # ATM Calculation (Nearest 50)
+        atm_strike = round(ltp_nifty / 50) * 50
+        idx_list = df_full.index[df_full['strike'] == atm_strike].tolist()
         
-        # Slice: 8 OTM Calls + ATM + 8 OTM Puts
-        df = df_full.iloc[max(0, idx - 8):min(len(df_full), idx + 9)].copy()
+        if idx_list:
+            idx = idx_list[0]
+            df = df_full.iloc[max(0, idx - 8):min(len(df_full), idx + 9)].copy()
+            
+            df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CH_OI_C'], x['CH_OI_C']), axis=1)
+            df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CH_OI_P'], x['CH_OI_P']), axis=1)
 
-        # Apply Live Logic Signals
-        df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CH_OI_Call'], x['CH_OI_Call']), axis=1)
-        df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CH_OI_Put'], x['CH_OI_Put']), axis=1)
-
-        # NSE Reordered Columns
-        final_cols = [
-            'OI_Call', 'CH_OI_Call', 'Vol_Call', 'LTP_Call', 'CALL_SIGNAL', 
-            'strike', 
-            'LTP_Put', 'Vol_Put', 'CH_OI_Put', 'OI_Put', 'PUT_SIGNAL'
-        ]
-        
-        st.table(df[final_cols].style.map(color_style, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
-        
-    except:
-        st.info("Market is Live! Streaming data into terminal...")
+            final_cols = ['OI_Call', 'CH_OI_C', 'Vol_C', 'LTP_C', 'CALL_SIGNAL', 'strike', 'LTP_P', 'Vol_P', 'CH_OI_P', 'OI_Put', 'PUT_SIGNAL']
+            st.table(df[final_cols].style.map(color_style, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
+        else:
+            st.warning("Aligning with ATM Strike...")
+            
+    except Exception as e:
+        st.info("Market Data Connecting... Please wait 5 seconds.")
 
 # --- PCR ---
 st.markdown("---")
