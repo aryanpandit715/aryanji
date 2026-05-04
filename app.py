@@ -18,8 +18,8 @@ if not st.session_state.password_correct:
         else: st.error("Wrong Password")
     st.stop()
 
-# 2. Dual Timer (1s for Index, 14s for Option Chain)
-count = st_autorefresh(interval=1000, key="devil_timer")
+# 2. 14 Second Auto-Refresh
+count = st_autorefresh(interval=14000, key="devil_timer")
 
 st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
 
@@ -33,7 +33,10 @@ with index_area.container():
     for i, sym in enumerate(symbols):
         try:
             tkr = yf.Ticker(sym)
-            p_val = tkr.fast_info.last_price or tkr.info.get('regularMarketPrice', 0)
+            p_val = tkr.fast_info.last_price
+            if p_val is None or p_val == 0:
+                p_val = tkr.info.get('regularMarketPrice') or tkr.info.get('previousClose', 0)
+            
             prev = tkr.info.get('previousClose') or p_val
             diff = p_val - prev
             pct = (diff / prev * 100) if prev else 0
@@ -43,33 +46,28 @@ with index_area.container():
 
 st.markdown("---")
 
-# --- INSTITUTIONAL LOGIC (Based on NSE Screenshot) ---
-def get_logic_signal(oi_chg, price_chg, side):
-    # Long Buildup: Price Up, OI Up
+# --- NSE LOGIC FUNCTIONS ---
+def get_logic_signal(oi_chg, price_chg):
     if price_chg > 0 and oi_chg > 0: return "😈 Smart Money Entry"
-    # Short Buildup: Price Down, OI Up
     if price_chg < 0 and oi_chg > 0: return "🚀 Short Buildup"
-    # Short Covering: Price Up, OI Down
     if price_chg > 0 and oi_chg < 0: return "🔥 Short Covering"
-    # Long Unwinding: Price Down, OI Down
     if price_chg < 0 and oi_chg < 0: return "⚓ Long Unwinding"
     return "Neutral"
 
 def color_logic(val):
-    if "Smart Money" in str(val): return "color: #00ff00; font-weight: bold;" # Green
-    if "Short Buildup" in str(val): return "color: #ff4b4b; font-weight: bold;" # Red
-    if "Short Covering" in str(val): return "color: #00d2ff; font-weight: bold;" # Blue
-    if "Unwinding" in str(val): return "color: #ffaa00; font-weight: bold;" # Orange
+    if "Smart Money" in str(val): return "background-color: #2b5329; color: white;" # Dark Green
+    if "Short Buildup" in str(val): return "background-color: #5e1919; color: white;" # Dark Red
+    if "Short Covering" in str(val): return "color: #00d2ff;" # Blue
     return ""
 
-# --- LIVE OPTION CHAIN ---
-refresh_in = 14 - (count % 14)
-st.markdown(f"### 🔥 Institutional Option Chain (Live Logic) | Update: {refresh_in}s")
-chain_area = st.empty()
+# --- OPTION CHAIN (1 ATM + 8 OTM CALL + 8 OTM PUT) ---
+st.markdown(f"### 🔥 Institutional Option Chain (30-Apr) | Refresh: 14s")
+chain_placeholder = st.empty()
 
-with chain_area.container():
+with chain_placeholder.container():
     try:
         nifty = yf.Ticker("^NSEI")
+        ltp_nifty = nifty.fast_info.last_price
         expiry = nifty.options[0]
         opts = nifty.option_chain(expiry)
         
@@ -78,21 +76,30 @@ with chain_area.container():
         puts = opts.puts[['strike', 'lastPrice', 'openInterest', 'change']].rename(
             columns={'lastPrice': 'LTP_P', 'openInterest': 'OI_P', 'change': 'CHNG_P'})
         
-        df = pd.merge(calls, puts, on='strike')
-        
-        # Current Market Price filter
-        curr_price = nifty.fast_info.last_price
-        df = df[(df['strike'] >= curr_price - 300) & (df['strike'] <= curr_price + 300)]
-        
-        # Apply NSE Logic
-        df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_C'], x['CHNG_C'], "Call"), axis=1)
-        df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_P'], x['CHNG_P'], "Put"), axis=1)
+        df_full = pd.merge(calls, puts, on='strike')
 
-        # Final Table
-        st.table(df[['strike', 'OI_C', 'LTP_C', 'CALL_SIGNAL', 'LTP_P', 'OI_P', 'PUT_SIGNAL']].style.map(color_logic))
+        # ATM Strike Calculation
+        atm_strike = round(ltp_nifty / 50) * 50
         
-    except:
-        st.info("Market data is streaming... Please wait.")
+        # Get Index of ATM
+        idx = df_full.index[df_full['strike'] == atm_strike].tolist()[0]
+        
+        # Filter: 8 OTM Call (Above ATM) + ATM + 8 OTM Put (Below ATM)
+        # In Nifty, OTM Calls are higher strikes, OTM Puts are lower strikes.
+        start_idx = max(0, idx - 8)
+        end_idx = min(len(df_full), idx + 9)
+        df = df_full.iloc[start_idx:end_idx].copy()
+
+        # Apply Signal Logic
+        df['CALL_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_C'], x['CHNG_C']), axis=1)
+        df['PUT_SIGNAL'] = df.apply(lambda x: get_logic_signal(x['CHNG_P'], x['CHNG_P']), axis=1)
+
+        # Formatting for display
+        final_df = df[['strike', 'OI_C', 'LTP_C', 'CALL_SIGNAL', 'LTP_P', 'OI_P', 'PUT_SIGNAL']]
+        st.table(final_df.style.map(color_logic, subset=['CALL_SIGNAL', 'PUT_SIGNAL']))
+        
+    except Exception as e:
+        st.warning("Fetching Live Option Chain Data...")
 
 # --- PCR ---
 st.markdown("---")
