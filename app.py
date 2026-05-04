@@ -19,13 +19,12 @@ if not st.session_state.password_correct:
         else: st.error("Wrong Password")
     st.stop()
 
-# 2. Dual Timer (1s for Index, 14s for Option Chain)
+# 2. Dual Timer (1s Index, 14s Option Chain)
 count = st_autorefresh(interval=1000, key="devil_timer")
 
 st.markdown("# 😈 DEVIL-PRO LIVE TERMINAL")
 
 # --- LIVE INDEX SECTION ---
-# Yahan humne direct live price fetch karne ka logic dala hai
 index_area = st.empty()
 symbols = ["^NSEI", "GIFTY=F", "^NSEBANK", "^N225", "^IXIC", "^DJI", "CL=F"]
 names = ["NIFTY 50", "GIFT NIFTY", "BANK NIFTY", "NIKKEI 225", "NASDAQ", "DOW JONES", "CRUDE OIL"]
@@ -35,34 +34,26 @@ with index_area.container():
     for i, sym in enumerate(symbols):
         try:
             tkr = yf.Ticker(sym)
-            # Live price ke liye fast_info + info ka combination
-            price_val = tkr.fast_info.last_price
-            if price_val is None or price_val == 0:
-                price_val = tkr.info.get('regularMarketPrice') or tkr.info.get('previousClose')
-            
+            price_val = tkr.fast_info.last_price or tkr.info.get('regularMarketPrice', 0)
             prev_close = tkr.info.get('previousClose') or price_val
             change = price_val - prev_close
             pct = (change / prev_close * 100) if prev_close else 0
-            
-            p_str = f"{price_val:,.2f}"
-            display = f"${p_str}" if i >= 4 else p_str
-            cols[i].metric(names[i], display, delta=f"{change:.2f} ({pct:.2f}%)")
+            cols[i].metric(names[i], f"{price_val:,.2f}", delta=f"{change:.2f} ({pct:.2f}%)")
         except:
             cols[i].metric(names[i], "0.00")
 
 st.markdown("---")
 
-# --- OPTION CHAIN SECTION ---
+# --- LIVE OPTION CHAIN (OI ADDED) ---
 refresh_in = 14 - (count % 14)
-st.markdown(f"### 🔥 Institutional Option Chain (30-Apr) | Update: {refresh_in}s")
+st.markdown(f"### 🔥 Institutional Option Chain (Live OI) | Update: {refresh_in}s")
 chain_area = st.empty()
 
-def get_signals(oi, price, side):
-    if side == "CALL" and oi < -5000: return "⚓ Call Unwinding"
-    if side == "PUT" and oi < -5000: return "⚓ Put Unwinding"
-    if oi < 0 and price > 0: return "🚀 Short Covering"
-    if oi > 0 and price > 0: return "😈 Smart Money Entry"
-    if oi < 0 and price < 0: return "⚓ Long Covering"
+def get_signals(oi_chg, side):
+    # OI Change ke basis par signals
+    if oi_chg < -5000: return "⚓ " + side + " Unwinding"
+    if oi_chg > 10000: return "😈 Smart Money Entry"
+    if oi_chg > 0: return "🚀 Short Covering"
     return "Neutral"
 
 def style_output(val):
@@ -72,24 +63,29 @@ def style_output(val):
     return ""
 
 with chain_area.container():
-    strikes = [23600, 23650, 23700, 23750, 23800, 23850, 23900, 23950, 24000, 
-               24050, 24100, 24150, 24200, 24250, 24300, 24350, 24400]
-    
-    # Ye data 30 April ka hi hai (Sample)
-    data = {
-        "Strike": strikes,
-        "LTP_Call": [450, 405, 360, 315, 270, 230, 190, 155, 120, 95, 75, 55, 40, 30, 20, 15, 10],
-        "OI_CHNG_Call": [500, 1200, -6500, 2100, -8000, 4500, 12221, -8500, 46564, 3000, -5500, 1500, 4000, -7000, 2000, 1000, 500],
-        "LTP_Put": [10, 15, 22, 30, 42, 55, 72, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545],
-        "OI_CHNG_Put": [1500, -9000, 4000, 2500, -7500, 5000, 25429, 11188, -6500, 4000, 2100, -5500, 3000, 1200, -8000, 500, 200],
-        "Price_Change": [5, 10, 15, -5, 20, 12, -93, -88, -84, 10, 15, 20, -5, 10, 5, 2, 1]
-    }
-    
-    df = pd.DataFrame(data)
-    df['CALL Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Call'], x['Price_Change'], "CALL"), axis=1)
-    df['PUT Signal'] = df.apply(lambda x: get_signals(x['OI_CHNG_Put'], x['Price_Change'], "PUT"), axis=1)
-    
-    st.table(df[['Strike', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'PUT Signal']].style.map(style_output, subset=['CALL Signal', 'PUT Signal']))
+    try:
+        nifty = yf.Ticker("^NSEI")
+        expiry = nifty.options[0] # Sabse pass wali expiry
+        opts = nifty.option_chain(expiry)
+        
+        calls = opts.calls[['strike', 'lastPrice', 'openInterest', 'change']].rename(
+            columns={'lastPrice': 'LTP_Call', 'openInterest': 'OI_Call', 'change': 'Chng_Call'})
+        puts = opts.puts[['strike', 'lastPrice', 'openInterest', 'change']].rename(
+            columns={'lastPrice': 'LTP_Put', 'openInterest': 'OI_Put', 'change': 'Chng_Put'})
+        
+        df = pd.merge(calls, puts, on='strike')
+        
+        # ATM strikes filter (+/- 500 points)
+        curr_nifty = nifty.fast_info.last_price
+        df = df[(df['strike'] >= curr_nifty - 500) & (df['strike'] <= curr_nifty + 500)]
+        
+        df['CALL Signal'] = df['Chng_Call'].apply(lambda x: get_signals(x, "Call"))
+        df['PUT Signal'] = df['Chng_Put'].apply(lambda x: get_signals(x, "Put"))
+
+        st.table(df[['strike', 'OI_Call', 'LTP_Call', 'CALL Signal', 'LTP_Put', 'OI_Put', 'PUT Signal']].style.map(style_output, subset=['CALL Signal', 'PUT Signal']))
+        
+    except:
+        st.error("Market Data Refreshing...")
 
 # --- PCR ---
 st.markdown("---")
